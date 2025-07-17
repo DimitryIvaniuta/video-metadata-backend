@@ -2,9 +2,8 @@ package com.github.dimitryivaniuta.videometadata.security;
 
 import com.github.dimitryivaniuta.videometadata.service.RedisTokenService;
 import com.github.dimitryivaniuta.videometadata.service.impl.UserDetailsServiceImpl;
-import io.jsonwebtoken.Claims;
-import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.core.Ordered;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
@@ -13,12 +12,18 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
+
 import reactor.core.publisher.Mono;
 
 /**
- * WebFilter for JWT-based authorization:
- * parses the token, validates it, checks revocation in Redis,
- * loads user details, and populates Reactor SecurityContext.
+ * Reactive filter that:
+ * <ul>
+ *   <li>Extracts Bearer JWT from Authorization header</li>
+ *   <li>Validates & parses via {@link JwtUtils}</li>
+ *   <li>Checks JTI presence in Redis (revocation store)</li>
+ *   <li>Loads Spring Security {@code UserDetails}</li>
+ *   <li>Populates Reactor SecurityContext</li>
+ * </ul>
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
@@ -33,9 +38,9 @@ public class JwtAuthorizationFilter implements WebFilter {
             final RedisTokenService redisTokenService,
             final UserDetailsServiceImpl userDetailsService
     ) {
-        this.jwtUtils            = jwtUtils;
-        this.redisTokenService   = redisTokenService;
-        this.userDetailsService  = userDetailsService;
+        this.jwtUtils          = jwtUtils;
+        this.redisTokenService = redisTokenService;
+        this.userDetailsService = userDetailsService;
     }
 
     @Override
@@ -43,37 +48,40 @@ public class JwtAuthorizationFilter implements WebFilter {
             final ServerWebExchange exchange,
             final WebFilterChain    chain
     ) {
-        String authHeader = exchange.getRequest()
+        String auth = exchange.getRequest()
                 .getHeaders()
                 .getFirst(HttpHeaders.AUTHORIZATION);
-
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        if (auth == null || !auth.startsWith("Bearer ")) {
             return chain.filter(exchange);
         }
 
-        String token = authHeader.substring(7);
-        Claims claims;
+        String token = auth.substring(7);
+        // Decode & validate signature/expiry
+        org.springframework.security.oauth2.jwt.Jwt jwt;
         try {
-            claims = jwtUtils.parseClaims(token);
+            jwt = jwtUtils.decode(token);
         } catch (Exception ex) {
-            return chain.filter(exchange); // invalid token
+            return chain.filter(exchange);
         }
 
-        String jti = jwtUtils.getJti(token);
+        String jti = jwt.getId();
         return redisTokenService.isTokenValid(jti)
                 .flatMap(valid -> {
                     if (!valid) {
                         return chain.filter(exchange);
                     }
-                    String username = claims.getSubject();
+                    String username = jwt.getSubject();
                     return userDetailsService.findByUsername(username)
                             .flatMap(userDetails -> {
-                                var auth = new UsernamePasswordAuthenticationToken(
-                                        userDetails, token, userDetails.getAuthorities()
+                                // Build Authentication and set it in Reactor Context
+                                var authToken = new UsernamePasswordAuthenticationToken(
+                                        userDetails,
+                                        token,
+                                        userDetails.getAuthorities()
                                 );
                                 return chain.filter(exchange)
                                         .contextWrite(ReactiveSecurityContextHolder
-                                                .withSecurityContext(Mono.just(new SecurityContextImpl(auth))));
+                                                .withSecurityContext(Mono.just(new SecurityContextImpl(authToken))));
                             });
                 });
     }
