@@ -2,7 +2,9 @@ package com.github.dimitryivaniuta.videometadata.web.controller;
 
 import com.github.dimitryivaniuta.videometadata.security.JwtUtils;
 import com.github.dimitryivaniuta.videometadata.service.RedisTokenService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.security.authentication.ReactiveAuthenticationManager;
@@ -36,16 +38,19 @@ public class AuthController {
 
     @PostMapping("/login")
     public Mono<ResponseEntity<LoginResponse>> login(@RequestBody LoginRequest req) {
-        return Mono.just(new UsernamePasswordAuthenticationToken(req.username(), req.password()))
+        return Mono.just(new UsernamePasswordAuthenticationToken(
+                        req.username(), req.password()))
                 .flatMap(authManager::authenticate)
                 .cast(Authentication.class)
                 .flatMap(auth -> {
                     String jwt = jwtUtils.generateToken(auth.getName());
                     String jti = jwtUtils.getJti(jwt);
-                    return tokenService
-                            .storeToken(jti, jwtUtils.getTtl())
-                            .map(stored -> ResponseEntity.ok(new LoginResponse(jwt)));
-                });
+                    return tokenService.storeToken(jti, jwtUtils.getTtl())
+                            .map(ok -> ResponseEntity.ok(new LoginResponse(jwt)));
+                })
+                .onErrorResume(BadCredentialsException.class, ex ->
+                        Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build())
+                );
     }
 
     /**

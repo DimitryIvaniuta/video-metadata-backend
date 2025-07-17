@@ -13,6 +13,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
+
 /**
  * Persistent user of the Video Metadata system.
  */
@@ -27,12 +29,12 @@ public class User {
      * Database‐sequence‐backed primary key.
      */
     @Id
-    @SequenceGenerator(
-            name         = "VM_UNIQUE_ID",
-            sequenceName = "VM_UNIQUE_ID",
-            allocationSize = 1
-    )
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "VM_UNIQUE_ID")
+    @SequenceGenerator(
+            name            = "VM_UNIQUE_ID",    // matches generator in @GeneratedValue
+            sequenceName    = "VM_UNIQUE_ID",    // matches your actual DB sequence
+            allocationSize  = 1                  // must match INCREMENT BY 1
+    )
     private Long id;
 
     /**
