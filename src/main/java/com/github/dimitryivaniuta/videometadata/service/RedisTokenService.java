@@ -1,39 +1,62 @@
 package com.github.dimitryivaniuta.videometadata.service;
 
 import java.time.Duration;
+
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.stereotype.Service;
+
 import reactor.core.publisher.Mono;
 
 /**
- * Stores and verifies JWT JTIs in Redis for revocation support.
+ * Persists and revokes JWT IDs (JTIs) in Redis to support token revocation.
  */
 @Service
 public class RedisTokenService {
 
-    private final ReactiveRedisTemplate<String,String> redis;
     private static final String PREFIX = "jwt:jti:";
 
-    public RedisTokenService(
-            final ReactiveRedisTemplate<String,String> redis
-    ) {
-        this.redis = redis;
+    private final ReactiveRedisTemplate<String, String> redisTemplate;
+
+    public RedisTokenService(final ReactiveRedisTemplate<String, String> redisTemplate) {
+        this.redisTemplate = redisTemplate;
     }
 
-    /** Saves a JTI with TTL; returns Mono<Boolean>. */
+    /**
+     * Stores a JTI in Redis with a TTL equal to the token lifespan.
+     *
+     * @param jti the JWT ID to store
+     * @param ttl time‑to‑live for this token
+     * @return Mono emitting true if stored successfully
+     */
     public Mono<Boolean> storeToken(final String jti, final Duration ttl) {
-        return redis.opsForValue().set(PREFIX + jti, "1", ttl);
+        return redisTemplate
+                .opsForValue()
+                .set(PREFIX + jti, "valid", ttl);
     }
 
-    /** Checks whether a JTI exists in Redis. */
+    /**
+     * Checks whether a given JTI is still present (i.e. not revoked/expired).
+     *
+     * @param jti the JWT ID to check
+     * @return Mono emitting true if the token is valid
+     */
     public Mono<Boolean> isTokenValid(final String jti) {
-        return redis.opsForValue().get(PREFIX + jti)
-                .map(v -> true)
+        return redisTemplate
+                .opsForValue()
+                .get(PREFIX + jti)
+                .map(val -> true)
                 .defaultIfEmpty(false);
     }
 
-    /** Deletes a JTI, revoking its token immediately. */
-    public Mono<Long> revokeToken(final String jti) {
-        return redis.opsForValue().delete(PREFIX + jti);
+    /**
+     * Revokes a token by deleting its JTI from Redis.
+     *
+     * @param jti the JWT ID to delete
+     * @return Mono emitting true if the key was deleted
+     */
+    public Mono<Boolean> revokeToken(final String jti) {
+        return redisTemplate
+                .opsForValue()
+                .delete(PREFIX + jti);
     }
 }
