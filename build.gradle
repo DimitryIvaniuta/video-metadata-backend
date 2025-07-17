@@ -14,12 +14,6 @@ java {
     }
 }
 
-configurations {
-    compileOnly {
-        extendsFrom annotationProcessor
-    }
-}
-
 repositories {
     mavenCentral()
 }
@@ -30,29 +24,26 @@ ext {
 }
 
 dependencies {
-
+    // Core
     implementation 'org.apache.commons:commons-lang3:3.18.0'
-
-    // Spring Boot WebFlux & JPA
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 
-    // Security: reactive + OAuth2 resource server + JOSE (Nimbus)
+    // Security: WebFlux + OAuth2 resource‐server + JOSE (Nimbus)
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
-//    implementation 'org.springframework.boot:spring-boot-starter-oauth2-jose'
     implementation 'org.springframework.security:spring-security-oauth2-jose'
 
-    // Caching + Redis (reactive)
+    // Redis caching/reactive
     implementation 'org.springframework.boot:spring-boot-starter-cache'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive'
 
-    // Resilience4j for retry, rate‑limit, circuit‑breaker
+    // Resilience4j (retry, rate‑limit, circuit‑breaker)
     implementation "io.github.resilience4j:resilience4j-spring-boot3:${resilience4jVersion}"
 
-    // Flyway for migrations
-    implementation('org.flywaydb:flyway-core:11.10.2')
-    implementation('org.flywaydb:flyway-database-postgresql:11.10.2')
+    // Flyway migrations
+    implementation 'org.flywaydb:flyway-core:11.10.2'
+    implementation 'org.flywaydb:flyway-database-postgresql:11.10.2'
 
     // PostgreSQL driver
     runtimeOnly 'org.postgresql:postgresql'
@@ -67,23 +58,18 @@ dependencies {
     // Testing
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'io.projectreactor:reactor-test'
-
-//    implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
-//    runtimeOnly    'io.jsonwebtoken:jjwt-impl:0.11.5'
-//    runtimeOnly    'io.jsonwebtoken:jjwt-jackson:0.11.5' // for JSON parsing
-
-//    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 }
 
 checkstyle {
-    toolVersion = '10.12.0'
-    configFile = rootProject.file('config/checkstyle.xml')
+    toolVersion    = '10.12.0'
+    configFile     = rootProject.file('config/checkstyle.xml')
     showViolations = true
 }
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
-    options.release = 21
+    // compile to Java 21 bytecode
+    options.release  = 21
 }
 
 tasks.named('test') {

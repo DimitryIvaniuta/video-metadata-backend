@@ -109,7 +109,8 @@ springdoc:
 logging:
   level:
     root: INFO
-    com.example.videometadata: DEBUG
+    org.springframework.security: DEBUG
+    com.github.dimitryivaniuta.videometadata: DEBUG
     io.github.resilience4j: INFO
     org.springframework: WARN
   pattern:

@@ -2,6 +2,7 @@ package com.github.dimitryivaniuta.videometadata.service.impl;
 
 import com.github.dimitryivaniuta.videometadata.domain.entity.User;
 import com.github.dimitryivaniuta.videometadata.persistence.repository.UserRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.ReactiveUserDetailsService;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -18,6 +19,7 @@ import reactor.core.scheduler.Schedulers;
  * so as not to block the WebFlux event‑loop.
  * </p>
  */
+@Slf4j
 @Service
 public class UserDetailsServiceImpl implements ReactiveUserDetailsService {
 
@@ -34,6 +36,20 @@ public class UserDetailsServiceImpl implements ReactiveUserDetailsService {
      * @param username the login name to look up
      * @return a {@link Mono} emitting the {@link UserDetails}
      */
+/*    @Override
+    public Mono<UserDetails> findByUsername(final String username) {
+        Mono<UserDetails> us = Mono.fromCallable(() ->
+                        userRepository.findByUsername(username)
+                                .orElseThrow(() ->
+                                        new UsernameNotFoundException("User not found: " + username))
+                )
+                // run the blocking call on a scheduler suited for JDBC
+                .subscribeOn(Schedulers.boundedElastic())
+                // map our domain User -> Spring Security UserDetails
+                .map(this::toUserDetails);
+
+        return us;
+    }*/
     @Override
     public Mono<UserDetails> findByUsername(final String username) {
         return Mono.fromCallable(() ->
@@ -43,6 +59,11 @@ public class UserDetailsServiceImpl implements ReactiveUserDetailsService {
                 )
                 // run the blocking call on a scheduler suited for JDBC
                 .subscribeOn(Schedulers.boundedElastic())
+                // log the retrieved user's encoded password
+                .doOnNext(userEntity ->
+                        log.debug("Loaded user [{}] with encoded password [{}]",
+                                username, userEntity.getPassword())
+                )
                 // map our domain User -> Spring Security UserDetails
                 .map(this::toUserDetails);
     }

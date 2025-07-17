@@ -38,18 +38,25 @@ public class AuthController {
 
     @PostMapping("/login")
     public Mono<ResponseEntity<LoginResponse>> login(@RequestBody LoginRequest req) {
-        return Mono.just(new UsernamePasswordAuthenticationToken(
-                        req.username(), req.password()))
-                .flatMap(authManager::authenticate)
+        UsernamePasswordAuthenticationToken authToken =
+                new UsernamePasswordAuthenticationToken(req.username(), req.password());
+
+        return authManager.authenticate(authToken)
+                // authManager.authenticate returning Authentication or error
                 .cast(Authentication.class)
                 .flatMap(auth -> {
+                    // on success, generate JWT and store JTI
                     String jwt = jwtUtils.generateToken(auth.getName());
                     String jti = jwtUtils.getJti(jwt);
                     return tokenService.storeToken(jti, jwtUtils.getTtl())
-                            .map(ok -> ResponseEntity.ok(new LoginResponse(jwt)));
+                            // transform to ResponseEntity<LoginResponse>
+                            .thenReturn(ResponseEntity.ok(new LoginResponse(jwt)));
                 })
-                .onErrorResume(BadCredentialsException.class, ex ->
-                        Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build())
+                // catch ONLY authentication failures
+                .onErrorResume(BadCredentialsException.class, e -> {
+                    e.printStackTrace();
+                            return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+                        }
                 );
     }
 
@@ -69,12 +76,12 @@ public class AuthController {
                     Authentication auth = ctx.getAuthentication();
                     if (auth == null) {
                         // no auth → 400
-                        return Mono.just(ResponseEntity.<Void>badRequest().build());
+                        return Mono.just(ResponseEntity.badRequest().build());
                     }
                     Object creds = auth.getCredentials();
                     if (!(creds instanceof String token)) {
                         // bad credentials → 400
-                        return Mono.just(ResponseEntity.<Void>badRequest().build());
+                        return Mono.just(ResponseEntity.badRequest().build());
                     }
                     String jti = jwtUtils.getJti(token);
                     // revoke in Redis

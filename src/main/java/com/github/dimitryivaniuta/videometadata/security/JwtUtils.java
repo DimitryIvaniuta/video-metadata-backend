@@ -4,19 +4,10 @@ import java.time.Instant;
 import java.time.Duration;
 import java.util.UUID;
 
-import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
-
 import lombok.Getter;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Primary;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.stereotype.Component;
-
-import com.nimbusds.jose.jwk.source.ImmutableSecret;
-import com.nimbusds.jose.proc.SecurityContext;
 
 /**
  * Helper to encode and decode JWTs using Nimbus under Spring Security.
@@ -84,30 +75,4 @@ public class JwtUtils {
         return decode(token).getId();
     }
 
-    @Configuration
-    static class JwtConfig {
-
-        /**
-         * Defines our custom JwtEncoder (HMAC‑SHA256).
-         */
-        @Bean
-        public JwtEncoder jwtEncoder(@Value("${JWT_SECRET}") final String base64Secret) {
-            byte[] keyBytes  = java.util.Base64.getDecoder().decode(base64Secret);
-            SecretKey secretKey = new SecretKeySpec(keyBytes, "HmacSHA256");
-            ImmutableSecret<SecurityContext> jwkSource = new ImmutableSecret<>(secretKey);
-            return new NimbusJwtEncoder(jwkSource);
-        }
-
-        /**
-         * Primary JwtDecoder bean using the same symmetric key.
-         * Named differently to avoid colliding with the auto‑configured bean.
-         */
-        @Bean
-        @Primary
-        public JwtDecoder customJwtDecoder(@Value("${JWT_SECRET}") final String base64Secret) {
-            byte[] keyBytes = java.util.Base64.getDecoder().decode(base64Secret);
-            SecretKey key   = new SecretKeySpec(keyBytes, "HmacSHA256");
-            return NimbusJwtDecoder.withSecretKey(key).build();
-        }
-    }
 }

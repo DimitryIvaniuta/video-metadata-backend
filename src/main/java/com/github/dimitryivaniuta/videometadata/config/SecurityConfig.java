@@ -4,6 +4,7 @@ import com.github.dimitryivaniuta.videometadata.security.JwtAuthorizationFilter;
 import com.github.dimitryivaniuta.videometadata.service.impl.UserDetailsServiceImpl;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.ReactiveAuthenticationManager;
 import org.springframework.security.authentication.UserDetailsRepositoryReactiveAuthenticationManager;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -46,12 +47,20 @@ public class SecurityConfig {
         return http
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .authorizeExchange(ex -> ex
-                        .pathMatchers("/auth/login",
-                                "/v3/api-docs/**",
-                                "/swagger-ui.html",
-                                "/swagger-ui/**").permitAll()
-                        .pathMatchers("/api/**").authenticated()
-                        .anyExchange().denyAll()
+                        // Allow anonymous POST to /api/auth/login
+//                        .pathMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                        // Swagger/UI still public
+//                        .pathMatchers("/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll()
+                        // Everything else under /api/** requires authentication
+//                        .pathMatchers("/api/**").authenticated()
+                        // Any other request (if not under /api) is denied
+//                        .anyExchange().denyAll()
+                                // **Allow POST /auth/login** (handler path)
+                                .pathMatchers(HttpMethod.POST, "/auth/login").permitAll()
+                                // Swagger UI
+                                .pathMatchers("/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll()
+                                // Everything else requires authentication
+                                .anyExchange().authenticated()
                 )
                 .addFilterAt(
                         jwtAuthorizationFilter,
@@ -78,8 +87,14 @@ public class SecurityConfig {
      *
      * @return the PasswordEncoder
      */
+//    @Bean
+//    public PasswordEncoder passwordEncoder() {
+//        return new BCryptPasswordEncoder();
+//    }
+
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+        // use the logging decorator so we can see raw vs. hash
+        return new LoggingPasswordEncoder();
     }
 }
