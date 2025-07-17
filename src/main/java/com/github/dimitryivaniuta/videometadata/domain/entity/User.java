@@ -27,12 +27,12 @@ public class User {
      * Database‐sequence‐backed primary key.
      */
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "VM_UNIQUE_ID")
     @SequenceGenerator(
-            name = "VM_UNIQUE_ID",
+            name         = "VM_UNIQUE_ID",
             sequenceName = "VM_UNIQUE_ID",
-            allocationSize = 10
+            allocationSize = 1
     )
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "VM_UNIQUE_ID")
     private Long id;
 
     /**
