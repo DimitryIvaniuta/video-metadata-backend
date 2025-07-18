@@ -10,12 +10,14 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.ResponseEntity;
+import reactor.core.publisher.Mono;
 
 /**
  * Exposes RESTful CRUD operations on users.
  */
 @RestController
-@RequestMapping("/api/users")
+@RequestMapping("/users")
 public class UserController {
 
     private final UserService userService;
@@ -50,10 +52,19 @@ public class UserController {
      *
      * @param id user ID
      */
+//    @GetMapping("/{id}")
+//    @PreAuthorize("hasAnyRole('ADMIN','USER')")
+//    public UserResponse getById(@PathVariable final Long id) {
+//        return userService.getById(id);
+//    }
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','USER')")
-    public UserResponse getById(@PathVariable final Long id) {
-        return userService.getById(id);
+//    @PreAuthorize("hasAnyRole('ADMIN')")
+    public Mono<ResponseEntity<UserResponse>> getById(@PathVariable Long id) {
+        return userService.findById(id)
+                // service gives you a UserResponse already
+                .map(ResponseEntity::ok)
+                // if empty, return 404
+                .defaultIfEmpty(ResponseEntity.notFound().build());
     }
 
     /**

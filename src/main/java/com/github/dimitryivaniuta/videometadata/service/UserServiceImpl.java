@@ -11,6 +11,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
+
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 /**
@@ -57,12 +60,17 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public UserResponse getById(final Long id) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "User not found"));
-        return toResponse(user);
+    public Mono<UserResponse> findById(Long id) {
+        return Mono
+                // Wrap the blocking JPA call
+                .fromCallable(() -> userRepository.findById(id))
+                // Run on a bounded‑elastic thread so we don't block the event‑loop
+                .subscribeOn(Schedulers.boundedElastic())
+                // Convert Optional<User> → Mono<User>
+                .flatMap(opt -> opt.map(Mono::just).orElse(Mono.empty()))
+                // Map the JPA entity to your DTO
+                .map(UserResponse::from);
     }
-
     @Override
     public UserResponse update(final Long id, final UserRequest request) {
         User user = userRepository.findById(id)

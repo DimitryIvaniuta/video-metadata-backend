@@ -4,6 +4,7 @@ import com.github.dimitryivaniuta.videometadata.domain.dto.UserRequest;
 import com.github.dimitryivaniuta.videometadata.domain.dto.UserResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import reactor.core.publisher.Mono;
 
 /**
  * Business operations on users.
@@ -39,7 +40,7 @@ public interface UserService {
      * @param id database ID
      * @return user data
      */
-    UserResponse getById(Long id);
+    Mono<UserResponse> findById(Long id);
 
     /**
      * Update an existing user.
