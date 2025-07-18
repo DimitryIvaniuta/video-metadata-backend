@@ -1,12 +1,10 @@
-package com.github.dimitryivaniuta.videometadata.service.impl;
+package com.github.dimitryivaniuta.videometadata.service;
 
 import com.github.dimitryivaniuta.videometadata.domain.dto.UserRequest;
 import com.github.dimitryivaniuta.videometadata.domain.dto.UserResponse;
 import com.github.dimitryivaniuta.videometadata.domain.entity.User;
 import com.github.dimitryivaniuta.videometadata.persistence.repository.UserRepository;
-import com.github.dimitryivaniuta.videometadata.service.UserService;
 import jakarta.transaction.Transactional;
-import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

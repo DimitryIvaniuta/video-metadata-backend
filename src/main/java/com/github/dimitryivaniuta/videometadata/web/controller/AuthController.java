@@ -2,6 +2,7 @@ package com.github.dimitryivaniuta.videometadata.web.controller;
 
 import com.github.dimitryivaniuta.videometadata.security.JwtUtils;
 import com.github.dimitryivaniuta.videometadata.service.RedisTokenService;
+import com.nimbusds.jose.JOSEException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -11,6 +12,8 @@ import org.springframework.security.authentication.ReactiveAuthenticationManager
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
+
+import java.time.Duration;
 
 /**
  * Authentication REST API: login issues JWTs, logout revokes them.
@@ -38,27 +41,29 @@ public class AuthController {
 
     @PostMapping("/login")
     public Mono<ResponseEntity<LoginResponse>> login(@RequestBody LoginRequest req) {
-        UsernamePasswordAuthenticationToken authToken =
-                new UsernamePasswordAuthenticationToken(req.username(), req.password());
-
-        return authManager.authenticate(authToken)
-                // authManager.authenticate returning Authentication or error
+        return authManager.authenticate(
+                        new UsernamePasswordAuthenticationToken(req.username(), req.password())
+                )
                 .cast(Authentication.class)
                 .flatMap(auth -> {
-                    // on success, generate JWT and store JTI
-                    String jwt = jwtUtils.generateToken(auth.getName());
-                    String jti = jwtUtils.getJti(jwt);
-                    return tokenService.storeToken(jti, jwtUtils.getTtl())
-                            // transform to ResponseEntity<LoginResponse>
-                            .thenReturn(ResponseEntity.ok(new LoginResponse(jwt)));
+                    try {
+                        // 1) generate token
+                        String jwt = jwtUtils.generateToken(auth.getName());
+                        // 2) extract jti
+                        String jti = jwtUtils.getJti(jwt);
+                        // 3) store in Redis using the TTL from JwtUtils
+                        return tokenService
+                                .storeToken(jti, jwtUtils.getTtl())
+                                .map(stored -> ResponseEntity.ok(new LoginResponse(jwt)));
+                    } catch (Exception e) {
+                        return Mono.error(new RuntimeException("JWT generation failed", e));
+                    }
                 })
-                // catch ONLY authentication failures
-                .onErrorResume(BadCredentialsException.class, e -> {
-                    e.printStackTrace();
-                            return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
-                        }
+                .onErrorResume(BadCredentialsException.class,
+                        e -> Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build())
                 );
     }
+
 
     /**
      * Revokes the current JWT by removing its JTI from Redis.

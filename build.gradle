@@ -33,6 +33,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
     implementation 'org.springframework.security:spring-security-oauth2-jose'
+    implementation 'com.nimbusds:nimbus-jose-jwt:10.3.1'
 
     // Redis caching/reactive
     implementation 'org.springframework.boot:spring-boot-starter-cache'

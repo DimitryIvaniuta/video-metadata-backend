@@ -1,4 +1,4 @@
-package com.github.dimitryivaniuta.videometadata.service.impl;
+package com.github.dimitryivaniuta.videometadata.service;
 
 import com.github.dimitryivaniuta.videometadata.domain.entity.User;
 import com.github.dimitryivaniuta.videometadata.persistence.repository.UserRepository;
