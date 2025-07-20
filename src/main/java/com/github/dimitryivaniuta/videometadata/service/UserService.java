@@ -1,53 +1,97 @@
 package com.github.dimitryivaniuta.videometadata.service;
 
-import com.github.dimitryivaniuta.videometadata.domain.dto.UserRequest;
-import com.github.dimitryivaniuta.videometadata.domain.dto.UserResponse;
+import com.github.dimitryivaniuta.videometadata.domain.entity.User;
+import com.github.dimitryivaniuta.videometadata.domain.model.Role;
+import com.github.dimitryivaniuta.videometadata.web.dto.UserCreateRequest;
+import com.github.dimitryivaniuta.videometadata.web.dto.UserResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+import java.util.Optional;
+
 /**
- * Business operations on users.
+ * User domain service encapsulating user CRUD operations,
+ * password encoding, and role management.
+ *
+ * Provides both synchronous (blocking) methods for internal
+ * use within transactional boundaries and reactive wrappers
+ * for WebFlux controllers.
  */
 public interface UserService {
 
-    /**
-     * Create a new user.
-     *
-     * @param request user details
-     * @return created user
-     */
-    UserResponse create(UserRequest request);
+    // ---------- Synchronous (blocking) API ----------
 
     /**
-     * Delete an existing user.
+     * Creates a new user after validating uniqueness of the username.
      *
-     * @param id database ID
+     * @param request user creation request
+     * @return created user entity
      */
-    void delete(Long id);
+    User createUser(UserCreateRequest request);
 
     /**
-     * Fetch a page of users.
+     * Fetches a user by id.
      *
-     * @param pageable pagination and sorting
-     * @return paged results
+     * @param id user id
+     * @return optional containing user if found
      */
-    Page<UserResponse> list(Pageable pageable);
+    Optional<User> findById(Long id);
 
     /**
-     * Fetch a single user.
+     * Retrieves a user by username.
      *
-     * @param id database ID
-     * @return user data
+     * @param username unique username
+     * @return optional user
      */
-    Mono<UserResponse> findById(Long id);
+    Optional<User> findByUsername(String username);
 
     /**
-     * Update an existing user.
+     * Lists users paginated.
      *
-     * @param id      database ID
-     * @param request new values
+     * @param pageable pagination request
+     * @return page of users
+     */
+    Page<User> listUsers(Pageable pageable);
+
+    /**
+     * Updates selected fields of a user (only password & role here).
+     *
+     * @param id user id
+     * @param newPassword optional new password plain text (null to ignore)
+     * @param newRole optional new role (null to ignore)
+     * @param enabled optional enabled flag (null to ignore)
      * @return updated user
      */
-    UserResponse update(Long id, UserRequest request);
+    User updateUser(Long id, String newPassword, Role newRole, Boolean enabled);
+
+    /**
+     * Deletes user by id (idempotent).
+     *
+     * @param id user id
+     */
+    void deleteUser(Long id);
+
+    /**
+     * Returns all users (use cautiously for very large datasets).
+     *
+     * @return list of users
+     */
+    List<User> findAll();
+
+    // ---------- Reactive convenience wrappers ----------
+
+    Mono<User> createUserMono(UserCreateRequest request);
+
+    Mono<User> findByIdMono(Long id);
+
+    Mono<User> findByUsernameMono(String username);
+
+    Flux<User> listUsersFlux(Pageable pageable);
+
+    Mono<User> updateUserMono(Long id, String newPassword, Role newRole, Boolean enabled);
+
+    Mono<Void> deleteUserMono(Long id);
 }

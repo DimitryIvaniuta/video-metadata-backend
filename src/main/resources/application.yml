@@ -2,6 +2,7 @@ spring:
   config:
     import:
       - "optional:file:.env[.properties]"
+      - "classpath:video‑providers.yml"
   application:
     name: video-metadata-backend
   # ——— DataSource / JPA ——————————————————————————————
@@ -116,3 +117,15 @@ logging:
     org.springframework: WARN
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
+
+imports:
+  max-concurrent: 3          # simultaneous active import jobs
+  max-queued: 10             # pending queued jobs (if >0 use queue; 0 = no queue)
+  rate-limit:
+    window: 60s              # sliding window length
+    max-requests: 15         # max accepted starts within window
+  duplicate-job-reject: true # reject if identical job active (else join)
+  service-retry:
+    enabled: true
+    max-attempts: 2
+    backoff: 1500ms

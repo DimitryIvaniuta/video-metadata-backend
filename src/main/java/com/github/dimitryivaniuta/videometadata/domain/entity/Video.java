@@ -1,17 +1,12 @@
 package com.github.dimitryivaniuta.videometadata.domain.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.SequenceGenerator;
-import jakarta.persistence.Table;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import com.github.dimitryivaniuta.videometadata.domain.model.VideoCategory;
+import com.github.dimitryivaniuta.videometadata.domain.model.VideoProvider;
+import jakarta.persistence.*;
+import lombok.*;
+
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 
 /**
  * Entity representing metadata of a video.
@@ -20,23 +15,36 @@ import java.time.LocalDateTime;
 @Table(name = "videos")
 @Getter
 @Setter
+@ToString
+@EqualsAndHashCode(of = "id")
 @NoArgsConstructor
 public class Video {
 
+    /** Primary key. */
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "VM_UNIQUE_ID")
+    @GeneratedValue(
+            strategy = GenerationType.SEQUENCE,
+            generator = "VM_UNIQUE_ID"
+    )
     @SequenceGenerator(
-            name           = "VM_UNIQUE_ID",
-            sequenceName   = "VM_UNIQUE_ID",
+            name = "VM_UNIQUE_ID",
+            sequenceName = "VM_UNIQUE_ID",
             allocationSize = 1
     )
     private Long id;
 
-    /** Title of the video. */
-    private String title;
+    /** Category / taxonomy for the video (ordinal persisted). */
+    @Enumerated(EnumType.ORDINAL)
+    @Column(nullable = false)
+    private VideoCategory category = VideoCategory.UNSPECIFIED;
 
-    /** External platform source (e.g., YouTube, Vimeo). */
-    private String source;
+    /** User id (foreign or external reference) that created/imported this record. */
+    @Column(name = "created_by_user_id", nullable = false)
+    private Long createdByUserId;
+
+    /** Video description. */
+    @Column(nullable = false)
+    private String description = "";
 
     /**
      * Duration of the video, stored as BIGINT (milliseconds) via converter.
@@ -44,7 +52,23 @@ public class Video {
     @Column(nullable = false)
     private Duration duration;
 
-    /** Timestamp when the video was uploaded. */
-    @Column(name = "upload_date", nullable = false)
-    private LocalDateTime uploadDate;
+    /** Origin provider (ordinal persisted). */
+    @Enumerated(EnumType.ORDINAL)
+    @Column(nullable = false)
+    private VideoProvider provider = VideoProvider.UNSPECIFIED;
+
+    /** External platform source (e.g., YouTube, Vimeo). */
+    @Column(nullable = false)
+    private String source;
+
+    /** Title of the video. */
+    @Column(nullable = false)
+    private String title;
+
+    /**
+     * Exact publish timestamp with zone (stored as TIMESTAMPTZ in PostgreSQL).
+     * Use UTC when source provides offset; retain offset if meaningful.
+     */
+    @Column(name = "upload_datetime", nullable = false)
+    private ZonedDateTime uploadDateTime;
 }

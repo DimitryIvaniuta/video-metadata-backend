@@ -1,7 +1,7 @@
 package com.github.dimitryivaniuta.videometadata.web.controller;
 
-import com.github.dimitryivaniuta.videometadata.domain.dto.UserRequest;
-import com.github.dimitryivaniuta.videometadata.domain.dto.UserResponse;
+import com.github.dimitryivaniuta.videometadata.web.dto.UserRequest;
+import com.github.dimitryivaniuta.videometadata.web.dto.UserResponse;
 import com.github.dimitryivaniuta.videometadata.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -52,14 +52,19 @@ public class UserController {
      *
      * @param id user ID
      */
-//    @GetMapping("/{id}")
-//    @PreAuthorize("hasAnyRole('ADMIN','USER')")
-//    public UserResponse getById(@PathVariable final Long id) {
-//        return userService.getById(id);
-//    }
     @GetMapping("/{id}")
-//    @PreAuthorize("hasAnyRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     public Mono<ResponseEntity<UserResponse>> getById(@PathVariable Long id) {
+        return userService.findById(id)
+                // service gives you a UserResponse already
+                .map(ResponseEntity::ok)
+                // if empty, return 404
+                .defaultIfEmpty(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/user/{id}")
+    @PreAuthorize("hasAnyRole('USER')")
+    public Mono<ResponseEntity<UserResponse>> getByForUserId(@PathVariable Long id) {
         return userService.findById(id)
                 // service gives you a UserResponse already
                 .map(ResponseEntity::ok)

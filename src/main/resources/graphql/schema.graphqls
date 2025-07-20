@@ -1,0 +1,144 @@
+# --- Custom Scalars ---
+scalar ZonedDateTime
+scalar DurationMillis
+
+# --- Enums ---
+enum VideoProvider {
+  YOUTUBE
+  VIMEO
+  INTERNAL
+}
+
+enum VideoCategory {
+  MUSIC
+  EDUCATION
+  NEWS
+  SPORTS
+  OTHER
+}
+
+enum VideoOrderBy {
+  UPLOAD_DATE
+  DURATION
+  TITLE
+  CREATED_AT
+}
+
+enum VideoOrderDirection {
+  ASC
+  DESC
+}
+
+# --- Pagination Types (Relay-ish minimal) ---
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
+  pageSize: Int!
+  totalElements: Long
+}
+
+type VideoEdge {
+  cursor: String!
+  node: Video!
+}
+
+type VideoConnection {
+  edges: [VideoEdge!]!
+  pageInfo: PageInfo!
+}
+
+# --- Domain Types ---
+type User {
+  id: ID!
+  username: String!
+  roles: [String!]!
+  createdAt: ZonedDateTime
+}
+
+type Video {
+  id: ID!
+  title: String!
+  provider: VideoProvider!
+  externalProviderVideoId: String!
+  category: VideoCategory
+  description: String
+  durationMillis: Long!
+  durationFormatted: String!
+  uploadDateTime: ZonedDateTime!
+  createdByUserId: ID
+  createdAt: ZonedDateTime
+  updatedAt: ZonedDateTime
+}
+
+type VideoStats {
+  totalPerProvider: [ProviderCount!]!
+  averageDurationPerProvider: [ProviderAverageDuration!]!
+}
+
+type ProviderCount {
+  provider: VideoProvider!
+  count: Long!
+}
+
+type ProviderAverageDuration {
+  provider: VideoProvider!
+  averageDurationMillis: Long!
+  averageDurationFormatted: String!
+}
+
+# --- Filter Inputs ---
+input VideoFilterInput {
+  provider: VideoProvider
+  category: VideoCategory
+  uploadedAfter: ZonedDateTime
+  uploadedBefore: ZonedDateTime
+  minDurationMillis: Long
+  maxDurationMillis: Long
+  searchTitleContains: String
+}
+
+input ImportRequestInput {
+  provider: VideoProvider!
+  playlistId: String
+  channelId: String
+  externalIds: [String!]
+  category: VideoCategory
+  descriptionPrefix: String
+}
+
+# --- Auth Related Outputs ---
+type LoginPayload {
+  token: String!
+  tokenType: String!
+  expiresAt: ZonedDateTime!
+}
+
+# --- Queries ---
+type Query {
+  me: User
+  user(id: ID!): User
+  users(limit: Int = 20, offset: Int = 0): [User!]!
+
+  video(id: ID!): Video
+  videos(
+    filter: VideoFilterInput
+    orderBy: VideoOrderBy = UPLOAD_DATE
+    direction: VideoOrderDirection = DESC
+    page: Int = 0
+    size: Int = 20
+  ): VideoConnection!
+
+  videoStats: VideoStats!
+}
+
+# --- Mutations ---
+type Mutation {
+  login(username: String!, password: String!): LoginPayload!
+  createUser(username: String!, password: String!, roles: [String!]!): User!  # ADMIN only
+  updateUser(id: ID!, password: String, roles: [String!]): User!
+  deleteUser(id: ID!): Boolean!
+
+  importVideos(request: ImportRequestInput!): Boolean!  # triggers async import, ADMIN only
+}

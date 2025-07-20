@@ -1,5 +1,6 @@
 package com.github.dimitryivaniuta.videometadata.domain.entity;
 
+import com.github.dimitryivaniuta.videometadata.domain.model.Role;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -12,8 +13,6 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
-import java.time.LocalDateTime;
 
 /**
  * Persistent user of the Video Metadata system.

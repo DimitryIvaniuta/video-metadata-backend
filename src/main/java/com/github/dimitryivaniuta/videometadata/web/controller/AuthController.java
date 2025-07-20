@@ -1,8 +1,7 @@
 package com.github.dimitryivaniuta.videometadata.web.controller;
 
 import com.github.dimitryivaniuta.videometadata.security.JwtUtils;
-import com.github.dimitryivaniuta.videometadata.service.RedisTokenService;
-import com.nimbusds.jose.JOSEException;
+import com.github.dimitryivaniuta.videometadata.security.RedisTokenService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -12,8 +11,6 @@ import org.springframework.security.authentication.ReactiveAuthenticationManager
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
-
-import java.time.Duration;
 
 /**
  * Authentication REST API: login issues JWTs, logout revokes them.

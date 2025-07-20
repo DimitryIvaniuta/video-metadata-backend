@@ -1,8 +1,5 @@
 package com.github.dimitryivaniuta.videometadata.security;
 
-import com.github.dimitryivaniuta.videometadata.service.RedisTokenService;
-import com.github.dimitryivaniuta.videometadata.service.UserDetailsServiceImpl;
-import com.nimbusds.jwt.JWTParser;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
@@ -27,7 +24,7 @@ import reactor.core.publisher.Mono;
  * </ol>
  */
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE)
+@Order(Ordered.HIGHEST_PRECEDENCE + 10)
 public class JwtAuthorizationFilter implements WebFilter {
 
     private final JwtUtils jwtUtils;
