@@ -5,9 +5,7 @@ import com.github.dimitryivaniuta.videometadata.domain.model.VideoProvider;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.ToString;
+import lombok.*;
 import org.hibernate.proxy.HibernateProxy;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -50,7 +48,11 @@ import java.util.Objects;
 @Getter
 @Setter
 @ToString(exclude = {"createdBy"})
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Video {
+
 
     /**
      * Surrogate primary key generated from sequence {@code VM_UNIQUE_ID}.
@@ -71,6 +73,12 @@ public class Video {
     @Column(name = "category", nullable = false)
     @NotNull
     private VideoCategory category;
+
+    /**
+     * The external‐provider’s video identifier.
+     */
+    @Column(name = "external_id", nullable = false, length = 100)
+    private String externalId;
 
     /**
      * User who initiated import / creation (nullable, lazy).
@@ -116,7 +124,9 @@ public class Video {
     /**
      * Original upload date/time with zone (provider normalized to UTC zone or provided zone).
      */
-    @Column(name = "upload_date_time", nullable = false)
+    @Column(name = "upload_date_time",
+            nullable = false,
+            columnDefinition = "TIMESTAMP WITH TIME ZONE")
     @NotNull
     private ZonedDateTime uploadDateTime;
 

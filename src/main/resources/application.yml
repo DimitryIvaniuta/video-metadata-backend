@@ -65,29 +65,33 @@ spring:
       time-to-live: PT5M
       cache-null-values: false
       enable-statistics: true
+  # ——— WebFlux base path ————————————————————————————————
+  webflux:
+    base-path: /api
 
   security:
     oauth2:
       resourceserver:
         jwt:
+          # Secret‑key for HS256 decoding in the reactive resource server
           # Auto-configured JwtDecoder using shared secret (HS256).
           secret-key: ${JWT_SECRET:CHANGEME_BASE64_SECRET}
-
   graphql:
+    schema:
+      printer:
+        enabled: true     # auto‑export GraphQL schema from code
     graphiql:
-      enabled: ${SPRING_GRAPHQL_GRAPHIQL_ENABLED:false}   # Enable in dev profile
-#    websocket:
-      # No configurable path property; default /graphql over WS if enabled.
-#      connection-init-timeout: PT10S
+      enabled: ${SPRING_GRAPHQL_GRAPHIQL_ENABLED:false}
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info,metrics,prometheus
+      base-path: /actuator
   endpoint:
     health:
-      show-details: ${MANAGEMENT_HEALTH_DETAILS:never}
+      show-details: never
 
 logging:
   level:
@@ -102,6 +106,7 @@ logging:
 ################################################################
 # CUSTOM CONFIGURATION PROPERTIES (Require @ConfigurationProperties)
 ################################################################
+
 security:
   jwt:
     issuer: ${JWT_ISSUER:video-metadata-app}
@@ -112,48 +117,53 @@ security:
     clock-skew-seconds: 60
 
 app:
-  async:
-    core-pool-size: ${ASYNC_CORE_POOL_SIZE:4}
-    max-pool-size: ${ASYNC_MAX_POOL_SIZE:16}
-    queue-capacity: ${ASYNC_QUEUE_CAPACITY:200}
-    thread-name-prefix: AsyncExec-
-    await-termination-seconds: 30
-    wait-for-tasks-on-shutdown: true
+  import:
+    concurrency-limit: ${IMPORT_CONCURRENCY_LIMIT:4}
+    max-retries: ${IMPORT_MAX_RETRIES:3}
+    backoff-seconds: ${IMPORT_BACKOFF_SECONDS:1s}
+    throttle:
+      max-concurrent: ${IMPORT_THROTTLE_MAX_CONCURRENT:2}
+      max-queued: ${IMPORT_THROTTLE_MAX_QUEUED:0}
+      rate-limit-window: ${IMPORT_THROTTLE_WINDOW:PT60S}
+      rate-limit-max-requests: ${IMPORT_THROTTLE_MAX_REQUESTS:20}
+      duplicate-job-reject: ${IMPORT_THROTTLE_DUPLICATE_REJECT:true}
+      service-retry:
+        enabled: ${IMPORT_SERVICE_RETRY_ENABLED:true}
+        max-attempts: ${IMPORT_SERVICE_RETRY_ATTEMPTS:2}
+        backoff: ${IMPORT_SERVICE_RETRY_BACKOFF:PT0.8S}
+    per-user:
+      rate-limit-per-user: ${IMPORT_RATE_LIMIT_PER_USER:5}
+      window: ${IMPORT_RATE_LIMIT_WINDOW:PT60S}
+      duplicate-cache-ttl-ms: ${IMPORT_DUPLICATE_CACHE_TTL_MS:600000}
+
+async:
+  core-pool-size: ${ASYNC_CORE_POOL_SIZE:4}
+  max-pool-size: ${ASYNC_MAX_POOL_SIZE:16}
+  queue-capacity: ${ASYNC_QUEUE_CAPACITY:200}
+  thread-name-prefix: AsyncExec-
+  await-termination-seconds: 30
+  wait-for-tasks-on-shutdown: true
 
 rate-limiter:
   redis:
-    prefix: ratelimit
-    default-capacity: 100
-    refill-tokens: 100
-    refill-period: PT60S
+    prefix: ${RATE_LIMITER_PREFIX:ratelimit}
+    default-capacity: ${RATE_LIMITER_DEFAULT_CAPACITY:100}
+    refill-tokens: ${RATE_LIMITER_REFILL_TOKENS:100}
+    refill-period: ${RATE_LIMITER_REFILL_PERIOD:PT60S}
 
 lock:
   redis:
-    prefix: lock
-    ttl: PT30S
-    extend-before-expiry: PT5S
+    prefix: ${LOCK_PREFIX:lock}
+    ttl: ${LOCK_TTL:PT30S}
+    extend-before-expiry: ${LOCK_EXTEND_BEFORE_EXPIRY:PT5S}
 
 token:
   redis:
-    prefix: jwt:revoked
-    ttl-seconds: 3600
-
-import:
-  concurrency-limit: 4
-  rate-limit-per-user: 5
-  window: PT60S
-  duplicate-cache-ttl-ms: 600000
+    prefix: ${TOKEN_REDIS_PREFIX:jwt:revoked}
+    ttl-seconds: ${TOKEN_TTL_SECONDS:3600}
 
 video:
   stats:
-    cache-ttl-ms: 300000
-  default-page-size: 20
-  max-page-size: 100
-
-providers:
-  youtube:
-    api-key: ${YOUTUBE_API_KEY:dummy_youtube_key}
-    base-url: https://www.googleapis.com/youtube/v3
-  vimeo:
-    access-token: ${VIMEO_ACCESS_TOKEN:dummy_vimeo_token}
-    base-url: https://api.vimeo.com
+    cache-ttl-ms: ${VIDEO_STATS_CACHE_TTL_MS:300000}
+  default-page-size: ${VIDEO_DEFAULT_PAGE_SIZE:20}
+  max-page-size: ${VIDEO_MAX_PAGE_SIZE:100}

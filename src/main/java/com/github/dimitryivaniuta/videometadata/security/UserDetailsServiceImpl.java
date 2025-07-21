@@ -1,7 +1,7 @@
 package com.github.dimitryivaniuta.videometadata.security;
 
 import com.github.dimitryivaniuta.videometadata.domain.entity.User;
-import com.github.dimitryivaniuta.videometadata.persistence.repository.UserRepository;
+import com.github.dimitryivaniuta.videometadata.domain.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.ReactiveUserDetailsService;
 import org.springframework.security.core.userdetails.UserDetails;

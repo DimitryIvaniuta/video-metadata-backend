@@ -1,111 +1,118 @@
 package com.github.dimitryivaniuta.videometadata.web.controller;
 
-import com.github.dimitryivaniuta.videometadata.web.dto.UserRequest;
-import com.github.dimitryivaniuta.videometadata.web.dto.UserResponse;
+import com.github.dimitryivaniuta.videometadata.web.dto.user.UserCreateRequest;
+import com.github.dimitryivaniuta.videometadata.web.dto.user.UserResponse;
+import com.github.dimitryivaniuta.videometadata.web.dto.user.UserUpdateRequest;
 import com.github.dimitryivaniuta.videometadata.service.UserService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.net.URI;
+
+
 /**
- * Exposes RESTful CRUD operations on users.
+ * REST controller for managing application users.
+ * <p>
+ * Exposes CRUD operations under <code>/api/users</code>. All endpoints
+ * require a valid JWT; only users with the ADMIN role may invoke these methods.
  */
 @RestController
-@RequestMapping("/users")
+@RequestMapping("/api/users")
+@Validated
+@RequiredArgsConstructor
 public class UserController {
 
+    /**
+     * The service layer for user operations.
+     */
     private final UserService userService;
 
-    @Autowired
-    public UserController(final UserService userService) {
-        this.userService = userService;
-    }
-
     /**
-     * List users (admin only).
+     * Create a new user.
      *
-     * @param page zero-based page index
-     * @param size page size
-     * @param sort comma-separated sort properties (e.g. \"username,desc\")
-     */
-    @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
-    public Page<UserResponse> list(
-            @RequestParam(defaultValue = "0") final int page,
-            @RequestParam(defaultValue = "20") final int size,
-            @RequestParam(defaultValue = "id,asc") final String sort
-    ) {
-        String[] parts = sort.split(",");
-        Sort s = Sort.by(Sort.Direction.fromString(parts[1]), parts[0]);
-        Pageable pg = PageRequest.of(page, size, s);
-        return userService.list(pg);
-    }
-
-    /**
-     * Get a single user (admin or user).
-     *
-     * @param id user ID
-     */
-    @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN')")
-    public Mono<ResponseEntity<UserResponse>> getById(@PathVariable Long id) {
-        return userService.findById(id)
-                // service gives you a UserResponse already
-                .map(ResponseEntity::ok)
-                // if empty, return 404
-                .defaultIfEmpty(ResponseEntity.notFound().build());
-    }
-
-    @GetMapping("/user/{id}")
-    @PreAuthorize("hasAnyRole('USER')")
-    public Mono<ResponseEntity<UserResponse>> getByForUserId(@PathVariable Long id) {
-        return userService.findById(id)
-                // service gives you a UserResponse already
-                .map(ResponseEntity::ok)
-                // if empty, return 404
-                .defaultIfEmpty(ResponseEntity.notFound().build());
-    }
-
-    /**
-     * Create a new user (admin only).
-     *
-     * @param request payload
+     * @param request the {@link UserCreateRequest} containing desired username, email, password, and roles
+     * @return a {@link Mono} emitting a {@link ResponseEntity} whose body is the created {@link UserResponse},
+     *         with HTTP status 201 (Created) and <code>Location</code> header pointing to the new resource
      */
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public UserResponse create(@RequestBody final UserRequest request) {
-        return userService.create(request);
+    public Mono<ResponseEntity<UserResponse>> createUser(
+            @Valid @RequestBody UserCreateRequest request) {
+        return userService.createUser(request)
+                .map(user -> ResponseEntity
+                        .created(URI.create("/users/" + user.id()))
+                        .body(user)
+                );
     }
 
     /**
-     * Update an existing user (admin only).
+     * Update an existing user.
      *
-     * @param id      user ID
-     * @param request payload
+     * @param id      the ID of the user to update
+     * @param request the {@link UserUpdateRequest} containing fields to modify
+     * @return a {@link Mono} emitting a {@link ResponseEntity} whose body is the updated {@link UserResponse},
+     * with HTTP status 200 (OK)
      */
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public UserResponse update(
-            @PathVariable final Long id,
-            @RequestBody final UserRequest request
-    ) {
-        return userService.update(id, request);
+    public Mono<ResponseEntity<UserResponse>> updateUser(
+            @PathVariable("id") Long id,
+            @Valid @RequestBody UserUpdateRequest request) {
+        return userService.updateUser(id, request)
+                .map(ResponseEntity::ok);
     }
 
     /**
-     * Delete a user (admin only).
+     * Delete a user by ID.
      *
-     * @param id user ID
+     * @param id the ID of the user to delete
+     * @return a {@link Mono} emitting a {@link ResponseEntity<Void>} with HTTP status 204 (No Content)
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public void delete(@PathVariable final Long id) {
-        userService.delete(id);
+    public Mono<ResponseEntity<Void>> deleteUser(@PathVariable("id") Long id) {
+        return userService.deleteUser(id)
+                .thenReturn(ResponseEntity.noContent().build());
+    }
+
+    /**
+     * Fetch a single user by ID.
+     *
+     * @param id the ID of the user to retrieve
+     * @return a {@link Mono} emitting a {@link ResponseEntity} whose body is the {@link UserResponse},
+     *         with HTTP status 200 (OK), or 404 if not found
+     */
+    @GetMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Mono<ResponseEntity<UserResponse>> getById(@PathVariable("id") Long id) {
+        return userService.findById(id)
+                .map(ResponseEntity::ok)
+                .defaultIfEmpty(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * List all users with pagination.
+     *
+     * @param page zero-based page index (default 0)
+     * @param size page size (default 20)
+     * @return a {@link Flux} emitting page contents as {@link UserResponse} objects,
+     *         with HTTP status 200 (OK)
+     */
+    @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    public Flux<UserResponse> listUsers(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+
+        Pageable pageable = PageRequest.of(page, size);
+        return userService.findAll(pageable);
     }
 }

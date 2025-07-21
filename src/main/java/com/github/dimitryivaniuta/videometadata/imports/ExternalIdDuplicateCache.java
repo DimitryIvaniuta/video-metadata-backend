@@ -1,11 +1,8 @@
 package com.github.dimitryivaniuta.videometadata.imports;
 
-import com.github.dimitryivaniuta.videometadata.config.ImportThrottleProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
-
-import java.time.Duration;
 
 @Component
 @RequiredArgsConstructor

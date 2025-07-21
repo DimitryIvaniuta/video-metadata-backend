@@ -1,89 +1,109 @@
 package com.github.dimitryivaniuta.videometadata.security;
 
-import com.nimbusds.jose.*;
-import com.nimbusds.jose.crypto.*;
-import com.nimbusds.jwt.*;
-import org.springframework.beans.factory.annotation.Value;
+import com.github.dimitryivaniuta.videometadata.config.SecurityJwtProperties;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.oauth2.jwt.*;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Base64;
-import java.util.Date;
+import java.util.Collections;
 import java.util.UUID;
 
+/**
+ * Utility for issuing and validating JWTs (HS256) using Spring Security OAuth2 JOSE support.
+ */
 @Component
+@RequiredArgsConstructor
 public class JwtUtils {
 
-    private final byte[] secret;
-    private final long   expirationSeconds;
-
-    public JwtUtils(
-            @Value("${JWT_SECRET}") String base64Secret,
-            @Value("${JWT_EXPIRATION_SECONDS:3600}") long expirationSeconds
-    ) {
-        this.secret            = Base64.getDecoder().decode(base64Secret);
-        this.expirationSeconds = expirationSeconds;
-    }
+    /**
+     * Decoder used to validate incoming tokens.
+     */
+    private final JwtDecoder jwtDecoder;
 
     /**
-     * Generate an HS256‑signed JWT.
+     * Encoder used to create new tokens.
      */
-    public String generateToken(String username) throws JOSEException {
+    private final JwtEncoder jwtEncoder;
+
+    /**
+     * Configuration properties for JWT (issuer, audience, secret, expiry).
+     */
+    private final SecurityJwtProperties props;
+
+    /**
+     * Generates an HS256‑signed JWT for the given username.
+     *
+     * @param username the subject (user) claim
+     * @return the serialized JWT
+     */
+    public String generateToken(String username) {
         Instant now = Instant.now();
-        JWTClaimsSet claims = new JWTClaimsSet.Builder()
-                .issuer("videometadata-api")
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer(props.getIssuer())
+                .issuedAt(now)
+                .expiresAt(now.plusSeconds(props.getExpirationSeconds()))
                 .subject(username)
-                .issueTime(Date.from(now))
-                .expirationTime(Date.from(now.plusSeconds(expirationSeconds)))
-                .jwtID(UUID.randomUUID().toString())
+                .audience(Collections.singletonList(props.getAudience()))
+                .id(UUID.randomUUID().toString())
                 .build();
 
-        JWSSigner signer = new MACSigner(secret);
-        SignedJWT signedJWT = new SignedJWT(
-                new JWSHeader(JWSAlgorithm.HS256),
-                claims
-        );
-        signedJWT.sign(signer);
-        return signedJWT.serialize();
+        return jwtEncoder
+                .encode(JwtEncoderParameters.from(claims))
+                .getTokenValue();
     }
 
     /**
-     * Validate signature & expiry.
+     * Validates a JWT’s signature and expiration.
+     *
+     * @param token the JWT string
+     * @return true if valid, false otherwise
      */
     public boolean validateToken(String token) {
         try {
-            SignedJWT jwt = SignedJWT.parse(token);
-            JWSVerifier verifier = new MACVerifier(secret);
-            return jwt.verify(verifier)
-                    && jwt.getJWTClaimsSet().getExpirationTime().after(new Date());
-        } catch (Exception e) {
+            jwtDecoder.decode(token);
+            return true;
+        } catch (JwtException e) {
             return false;
         }
     }
 
     /**
-     * Extract the subject (username).
+     * Extracts the subject (username) from the JWT.
+     *
+     * @param token the JWT string
+     * @return the subject claim
      */
-    public String getUsername(String token) throws java.text.ParseException {
-        return SignedJWT.parse(token).getJWTClaimsSet().getSubject();
+    public String getUsername(String token) {
+        return jwtDecoder.decode(token).getSubject();
     }
 
     /**
-     * Extract the token’s JTI.
+     * Extracts the JWT ID (jti) claim from the token.
+     *
+     * @param token the JWT string
+     * @return the JWT ID
      */
     public String getJti(String token) {
-        try {
-            return SignedJWT.parse(token).getJWTClaimsSet().getJWTID();
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Unable to parse JTI from JWT", e);
-        }
+        return jwtDecoder.decode(token).getId();
     }
 
     /**
-     * Expose the token time‑to‑live as a Duration, for Redis.
+     * Returns the configured expiration interval (in seconds).
+     *
+     * @return expiration in seconds
+     */
+    public long getExpirationSeconds() {
+        return props.getExpirationSeconds();
+    }
+
+    /**
+     * Returns a Duration representing token time‑to‑live.
+     *
+     * @return TTL as Duration
      */
     public Duration getTtl() {
-        return Duration.ofSeconds(expirationSeconds);
+        return Duration.ofSeconds(props.getExpirationSeconds());
     }
 }

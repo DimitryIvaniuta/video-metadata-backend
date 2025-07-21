@@ -1,226 +1,160 @@
 package com.github.dimitryivaniuta.videometadata.service;
 
-import com.github.dimitryivaniuta.videometadata.domain.entity.Video;
-import com.github.dimitryivaniuta.videometadata.domain.model.VideoCategory;
+import com.github.dimitryivaniuta.videometadata.config.ImportProperties;
 import com.github.dimitryivaniuta.videometadata.domain.model.VideoProvider;
-import com.github.dimitryivaniuta.videometadata.imports.ExternalIdDuplicateCache;
-import com.github.dimitryivaniuta.videometadata.imports.ImportJobKey;
-import com.github.dimitryivaniuta.videometadata.imports.ImportMetrics;
-import com.github.dimitryivaniuta.videometadata.imports.RedisDistributedLock;
-import com.github.dimitryivaniuta.videometadata.imports.RedisRateLimiter;
-import com.github.dimitryivaniuta.videometadata.provider.ExternalVideoClient;
-import io.github.resilience4j.retry.annotation.Retry;
-import lombok.Builder;
-import lombok.Getter;
+import com.github.dimitryivaniuta.videometadata.web.dto.video.VideoImportRequest;
+import com.github.dimitryivaniuta.videometadata.event.AsyncErrorEvent;
+import io.github.resilience4j.retry.Retry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.InitializingBean;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.core.annotation.Order;
+import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.util.retry.RetryBackoffSpec;
 
+import java.lang.reflect.Method;
 import java.time.Duration;
-import java.time.ZonedDateTime;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
 
 /**
- * Orchestrates video imports from external providers.
- * Handles rate limiting, duplicate import prevention, distributed
- * locking, resilience, metrics and asynchronous execution.
+ * Service responsible for orchestrating background imports of video metadata
+ * from external providers.  Submits import jobs asynchronously, applies
+ * concurrency limits, retries, de-duplication, and publishes any async errors
+ * as {@link AsyncErrorEvent}s.
+ * Orchestrates background video metadata imports:
+ * - per-user rate limiting
+ * - duplicate suppression
+ * - global concurrency throttling
+ * - external API retries
+ * - persistence via VideoService
+ * - publishes AsyncErrorEvent on failures
  */
 @Service
 @RequiredArgsConstructor
+@Order  // ensure this bean is initialized before any listeners
 @Slf4j
-public class VideoImportService {
+public class VideoImportService implements InitializingBean {
 
-    // Alphabetically sorted dependencies / internal fields
-    private final ExternalIdDuplicateCache duplicateCache;
-    private final Map<VideoProvider, ExternalVideoClient> providerClients; // injected via config (Map bean)
-    private final RedisDistributedLock distributedLock;
-    private final RedisRateLimiter rateLimiter;
-    private final com.github.dimitryivaniuta.videometadata.service.impl.VideoService videoService;
-    private final ImportMetrics metrics;
+    private final VideoService videoService;
+    private final UserService userService;
+    private final ReactiveRedisTemplate<String, Object> redis;
+    private final ImportProperties props;
+    private final ApplicationEventPublisher publisher;
+    private final Map<VideoProvider, ExternalVideoClient> clientMap;
 
-    /** In‑memory job guard to reject simultaneous identical jobs quickly (local node). */
-    private final Set<ImportJobKey> localActiveJobs = ConcurrentHashMap.newKeySet();
+    private RetryBackoffSpec retrySpec;
+    private Method submitMethod;
 
-    /**
-     * Submission response describing outcome.
-     */
-    @Getter
-    @Builder
-    public static class ImportSubmissionResponse {
-        private final boolean accepted;
-        private final String  message;
+    @Override
+    public void afterPropertiesSet() throws NoSuchMethodException {
+        this.retrySpec = Retry.fixedDelay(
+                props.getMaxRetries(),
+                props.getBackoffSeconds()
+        ).toRetryBackoffSpec();
+        this.submitMethod = this.getClass()
+                .getMethod("submitImport", String.class, VideoImportRequest.class);
     }
 
     /**
-     * Submit an import job for selected providers. Null parameters
-     * for identifiers are allowed; provider clients can interpret.
-     *
-     * @param youtubePlaylistId optional playlist id
-     * @param vimeoUserId optional vimeo user or channel id
-     * @param requestedByUserId user initiating import
-     * @return submission response
-     */
-    public ImportSubmissionResponse submitImport(String youtubePlaylistId,
-                                                 String vimeoUserId,
-                                                 Long requestedByUserId) {
-
-        // Basic per-user + global rate limiting
-        if (!rateLimiter.tryConsumeGlobal(1)) {
-            return ImportSubmissionResponse.builder()
-                    .accepted(false)
-                    .message("Global import rate limit exceeded")
-                    .build();
-        }
-        if (!rateLimiter.tryConsumeUser(requestedByUserId.toString(), 1)) {
-            return ImportSubmissionResponse.builder()
-                    .accepted(false)
-                    .message("User import rate limit exceeded")
-                    .build();
-        }
-
-        // Compose a job key
-        ImportJobKey key = ImportJobKey.of(
-                Optional.ofNullable(youtubePlaylistId).orElse(""),
-                Optional.ofNullable(vimeoUserId).orElse(""),
-                requestedByUserId
-        );
-
-        if (!localActiveJobs.add(key)) {
-            return ImportSubmissionResponse.builder()
-                    .accepted(false)
-                    .message("Similar import already running on this node")
-                    .build();
-        }
-
-        // Acquire distributed lock (to stop other nodes)
-        String lockName = "import:" + key.hash();
-        if (!distributedLock.tryLock(lockName)) {
-            localActiveJobs.remove(key);
-            return ImportSubmissionResponse.builder()
-                    .accepted(false)
-                    .message("Import already running cluster-wide")
-                    .build();
-        }
-
-        // Async fire‑and‑forget (errors recorded in metrics + logs)
-        startAsyncImport(key, youtubePlaylistId, vimeoUserId, requestedByUserId, lockName);
-        return ImportSubmissionResponse.builder()
-                .accepted(true)
-                .message("Import accepted and running asynchronously")
-                .build();
-    }
-
-    /**
-     * Initiates asynchronous import logic.
+     * Schedule an asynchronous import for the given user and request.
+     * @param username the current user's username
+     * @param request  provider + external IDs
      */
     @Async("taskExecutor")
-    @Retry(name = "videoImportRetry", fallbackMethod = "retryFallback")
-    public void startAsyncImport(ImportJobKey key,
-                                 String youtubePlaylistId,
-                                 String vimeoUserId,
-                                 Long requestedByUserId,
-                                 String lockName) {
-
-        long startNs = System.nanoTime();
-        int imported = 0;
-        int skipped = 0;
-
-        try {
-            // YOUTUBE
-            if (youtubePlaylistId != null && !youtubePlaylistId.isBlank()) {
-                imported += importFromProvider(VideoProvider.YOUTUBE,
-                        Map.of("playlistId", youtubePlaylistId),
-                        requestedByUserId);
-            }
-
-            // VIMEO
-            if (vimeoUserId != null && !vimeoUserId.isBlank()) {
-                imported += importFromProvider(VideoProvider.VIMEO,
-                        Map.of("userId", vimeoUserId),
-                        requestedByUserId);
-            }
-
-            long elapsedMs = Duration.ofNanos(System.nanoTime() - startNs).toMillis();
-            metrics.recordImportBatch(imported, skipped, elapsedMs);
-            log.info("Import job {} completed: imported={} skipped={} elapsed={}ms",
-                    key.hash(), imported, skipped, elapsedMs);
-        } catch (Exception ex) {
-            metrics.incrementFailedImports();
-            log.error("Import job {} failed: {}", key.hash(), ex.getMessage(), ex);
-        } finally {
-            localActiveJobs.remove(key);
-            distributedLock.unlock(lockName);
-        }
-    }
-
-    /**
-     * Fallback used by Resilience4j when retries are exhausted.
-     */
-    @SuppressWarnings("unused")
-    public void retryFallback(ImportJobKey key,
-                              String youtubePlaylistId,
-                              String vimeoUserId,
-                              Long requestedByUserId,
-                              String lockName,
-                              Throwable t) {
-        log.error("Retry fallback for import job {} due to {}", key.hash(), t.getMessage(), t);
-        metrics.incrementFailedImports();
-        localActiveJobs.remove(key);
-        distributedLock.unlock(lockName);
-    }
-
-    /**
-     * Imports videos from a specific provider with given params.
-     */
-    private int importFromProvider(VideoProvider provider,
-                                   Map<String, String> params,
-                                   Long requestedByUserId) {
-
-        ExternalVideoClient client = providerClients.get(provider);
+    public void submitImport(String username, VideoImportRequest request) {
+        VideoProvider provider = request.getProvider();
+        var client = clientMap.get(provider);
         if (client == null) {
-            log.warn("No client configured for provider={}", provider);
-            return 0;
+            throw new IllegalStateException("No client for provider: " + provider);
         }
 
-        List<ExternalVideoClient.ExternalVideo> externalVideos = client.fetchVideos(params);
-        int imported = 0;
-
-        for (ExternalVideoClient.ExternalVideo ext : externalVideos) {
-            // Deduplicate quickly by external id
-            String externalId = ext.externalId();
-            if (externalId == null || externalId.isBlank()) {
-                continue;
-            }
-            if (duplicateCache.isRecentlyImported(provider, externalId)) {
-                continue;
-            }
-            if (videoService.existsByProviderAndExternalId(provider, externalId)) {
-                duplicateCache.markImported(provider, externalId);
-                continue;
-            }
-
-            try {
-                Video video = new Video();
-                video.setTitle(ext.title());
-                video.setDescription(ext.description() != null ? ext.description() : "");
-                video.setProvider(provider);
-                video.setCategory(Optional.ofNullable(ext.category()).orElse(VideoCategory.UNSPECIFIED));
-                video.setDuration(ext.duration() != null ? ext.duration() : Duration.ZERO);
-                video.setUploadDateTime(Optional.ofNullable(ext.uploadDateTime()).orElse(ZonedDateTime.now()));
-                video.setCreatedByUserId(requestedByUserId);
-                video.setExternalVideoId(externalId);
-
-                videoService.save(video);
-                duplicateCache.markImported(provider, externalId);
-                imported++;
-            } catch (Exception e) {
-                log.warn("Failed to persist video provider={} externalId={} reason={}",
-                        provider, externalId, e.getMessage());
-            }
+        // Per-user rate limiting
+        String userKey = "import:rate:" + username;
+        Long count = redis.opsForValue()
+                .increment(userKey, 1)
+                .flatMap(c -> {
+                    if (c == 1) {
+                        return redis.expire(userKey, props.getPerUser().getWindow())
+                                .thenReturn(c);
+                    }
+                    return Mono.just(c);
+                })
+                .block(Duration.ofSeconds(5));
+        if (count != null && count > props.getPerUser().getRateLimitPerUser()) {
+            throw new RateLimitExceededException(username, props.getPerUser().getRateLimitPerUser());
         }
-        metrics.incrementImported(imported);
-        return imported;
+
+        Flux.fromIterable(request.getExternalIds())
+                .flatMap(extId -> {
+                    String dupKey = "import:dup:" + username + ":" + extId;
+                    return redis.opsForValue()
+                            .setIfAbsent(dupKey, "1", Duration.ofMillis(props.getPerUser().getDuplicateCacheTtlMs()))
+                            .flatMap(set -> {
+                                if (!set && props.getThrottle().isDuplicateJobReject()) {
+                                    return Mono.error(new DuplicateImportException(extId));
+                                }
+                                return importSingle(username, client, provider, extId);
+                            });
+                }, props.getThrottle().getMaxConcurrent())
+                .doOnError(err -> log.error("Import stream error: {}", err.getMessage()))
+                .onErrorContinue((err, obj) ->
+                        publisher.publishEvent(new AsyncErrorEvent(
+                                this, err, submitMethod, new Object[]{username, request}
+                        ))
+                )
+                .subscribe();
+    }
+
+
+
+
+    /**
+     * Import a single video ID for the given user.
+     * @param username   current user's name
+     * @param client     provider-specific client
+     * @param provider   video provider enum
+     * @param externalId external video ID
+     * @return completion Mono
+     */
+    private Mono<Void> importSingle(String username,
+                                    ExternalVideoClient client,
+                                    VideoProvider provider,
+                                    String externalId) {
+        return videoService.existsByProviderAndExternalIdMono(provider, externalId)
+                .flatMap(exists -> {
+                    if (exists) {
+                        return Mono.empty();
+                    }
+                    return client.fetchVideoMetadata(externalId)
+                            .retryWhen(retrySpec)
+                            .flatMap(video -> userService
+                                    .findByUsernameMono(username)
+                                    .map(user -> {
+                                        video.setCreatedBy(user);
+                                        return video;
+                                    })
+                            )
+                            .flatMap(videoService::saveMono)
+                            .then();
+                });
+    }
+
+    /** Indicates a user exceeded their import rate. */
+    public static class RateLimitExceededException extends RuntimeException {
+        public RateLimitExceededException(String user, int limit) {
+            super("User " + user + " exceeded rate limit of " + limit);
+        }
+    }
+
+    /** Indicates a duplicate import was rejected. */
+    public static class DuplicateImportException extends RuntimeException {
+        public DuplicateImportException(String externalId) {
+            super("Duplicate import rejected for ID: " + externalId);
+        }
     }
 }

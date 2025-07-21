@@ -4,7 +4,7 @@ import java.util.Arrays;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+//import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.core.env.Environment;
@@ -20,7 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @SpringBootApplication
 @EnableCaching
-@ConfigurationPropertiesScan("com.github.dimitryivaniuta.videometadata.config")
+//@ConfigurationPropertiesScan("com.github.dimitryivaniuta.videometadata.config")
 public class VideoMetadataApplication {
 
     /**
