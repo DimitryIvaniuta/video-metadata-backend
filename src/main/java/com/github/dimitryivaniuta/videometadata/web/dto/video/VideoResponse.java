@@ -1,8 +1,9 @@
 package com.github.dimitryivaniuta.videometadata.web.dto.video;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.github.dimitryivaniuta.videometadata.domain.model.VideoCategory;
+import com.github.dimitryivaniuta.videometadata.domain.model.VideoProvider;
 
-import java.time.Instant;
 import java.time.ZonedDateTime;
 
 /**
@@ -24,12 +25,12 @@ public record VideoResponse(
         @JsonProperty("external_video_id") String externalVideoId,
         @JsonProperty("title") String title,
         @JsonProperty("description") String description,
-        @JsonProperty("provider") String provider,
-        @JsonProperty("category") String category,
+        @JsonProperty("provider") VideoProvider provider,
+        @JsonProperty("category") VideoCategory category,
         @JsonProperty("duration_ms") long durationMs,
         @JsonProperty("upload_date_time") ZonedDateTime uploadDateTime,
         @JsonProperty("created_by_user_id") Long createdByUserId,
-        @JsonProperty("imported_at") Instant importedAt
+        @JsonProperty("imported_at") ZonedDateTime importedAt
 ) {
     public static VideoResponse from(com.github.dimitryivaniuta.videometadata.domain.entity.Video v) {
         return new VideoResponse(

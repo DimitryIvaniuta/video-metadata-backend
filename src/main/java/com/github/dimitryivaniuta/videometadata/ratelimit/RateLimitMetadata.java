@@ -1,4 +1,6 @@
-package com.github.dimitryivaniuta.videometadata.rate;
+package com.github.dimitryivaniuta.videometadata.ratelimit;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.time.Instant;
 
@@ -12,9 +14,11 @@ import java.time.Instant;
  * @param limited          Whether the current request was limited (false if just informational).
  */
 public record RateLimitMetadata(
-        long capacity,
-        long remainingTokens,
-        Instant refillAt,
-        long resetAfterMillis,
-        boolean limited
-) {}
+        @JsonProperty("capacity") long capacity,
+        @JsonProperty("remaining_tokens") long remainingTokens,
+        @JsonProperty("refill_at") Instant refillAt,
+        @JsonProperty("reset_after_ms") long resetAfterMillis,
+        @JsonProperty("limited") boolean limited
+) {
+}
+

@@ -6,7 +6,8 @@ import com.github.dimitryivaniuta.videometadata.domain.model.VideoCategory;
 import com.github.dimitryivaniuta.videometadata.domain.model.VideoProvider;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
-import java.time.Instant;
+
+import java.time.ZonedDateTime;
 import java.util.Set;
 
 import org.springframework.format.annotation.DateTimeFormat;
@@ -37,12 +38,12 @@ public record VideoFilterRequest(
         //Earliest upload timestamp (inclusive). ISO‑8601 e.g. 2025‑07‑18T12:00:00Z
         @JsonProperty("uploaded_from")
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
-        Instant uploadedFrom,
+        ZonedDateTime uploadedFrom,
 
         //Latest upload timestamp (inclusive). ISO‑8601.
         @JsonProperty("uploaded_to")
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
-        Instant uploadedTo,
+        ZonedDateTime uploadedTo,
 
         //Minimum duration, in milliseconds (>= 0).
         @Min(0)

@@ -1,7 +1,7 @@
 -- Adds integer (ordinal) columns for category to videos table.
 
 ALTER TABLE videos
-    ADD COLUMN IF NOT EXISTS category INTEGER NOT NULL DEFAULT 0;
+    ADD COLUMN IF NOT EXISTS category SMALLINT NOT NULL DEFAULT 0;
 
 -- add simple check constraints to bound future values.
 -- Adjust upper bounds when you add more enum constants.

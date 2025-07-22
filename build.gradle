@@ -54,6 +54,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
     implementation 'org.springframework.boot:spring-boot-starter-graphql'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'com.graphql-java:graphql-java:24.1'
+    implementation 'com.graphql-java:graphql-java-extended-scalars:24.0'
 
     // Redis reactive, caching
     implementation 'org.springframework.boot:spring-boot-starter-cache'

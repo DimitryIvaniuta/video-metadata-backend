@@ -1,8 +1,9 @@
 package com.github.dimitryivaniuta.videometadata.web.dto.video;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.github.dimitryivaniuta.videometadata.domain.model.VideoProvider;
 
-import java.time.Instant;
+import java.time.ZonedDateTime;
 
 /**
  * Aggregated statistics per provider/category or global.
@@ -14,10 +15,10 @@ import java.time.Instant;
  * @param generatedAt        Timestamp the stats snapshot generated.
  */
 public record VideoStatsResponse(
-        @JsonProperty("provider") String provider,
+        @JsonProperty("provider") VideoProvider provider,
         @JsonProperty("total_videos") long totalVideos,
         @JsonProperty("average_duration_ms") long averageDurationMs,
         @JsonProperty("category_counts_json") String categoryCountsJson,
-        @JsonProperty("generated_at") Instant generatedAt
+        @JsonProperty("generated_at") ZonedDateTime generatedAt
 ) {
 }

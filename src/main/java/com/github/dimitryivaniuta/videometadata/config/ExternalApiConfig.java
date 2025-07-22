@@ -9,7 +9,7 @@ import org.springframework.web.reactive.function.client.WebClient;
  * Configures WebClients for each external provider.
  */
 @Configuration
-@EnableConfigurationProperties(ProvidersProperties.class)
+//@EnableConfigurationProperties(ProvidersProperties.class)
 public class ExternalApiConfig {
 
     @Bean("youtubeWebClient")
