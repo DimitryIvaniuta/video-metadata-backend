@@ -29,12 +29,12 @@ public class JwtAuthorizationFilter implements WebFilter {
 
     private final JwtUtils jwtUtils;
     private final RedisTokenService tokenService;
-    private final UserDetailsServiceImpl userDetailsService;
+    private final ReactiveUserDetailsServiceImpl userDetailsService;
 
     public JwtAuthorizationFilter(
             JwtUtils jwtUtils,
             RedisTokenService tokenService,
-            UserDetailsServiceImpl userDetailsService
+            ReactiveUserDetailsServiceImpl userDetailsService
     ) {
         this.jwtUtils = jwtUtils;
         this.tokenService = tokenService;

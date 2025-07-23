@@ -1,6 +1,5 @@
 package com.github.dimitryivaniuta.videometadata.security;
 
-import com.github.dimitryivaniuta.videometadata.config.SecurityJwtProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.stereotype.Component;

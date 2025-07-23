@@ -1,11 +1,11 @@
 package com.github.dimitryivaniuta.videometadata.domain.repository;
 
 import com.github.dimitryivaniuta.videometadata.domain.entity.VideoImportSubmission;
-import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.r2dbc.repository.R2dbcRepository;
+import reactor.core.publisher.Mono;
 
-import java.util.Optional;
+public interface VideoImportSubmissionRepository extends R2dbcRepository<VideoImportSubmission, Long> {
 
-public interface VideoImportSubmissionRepository extends JpaRepository<VideoImportSubmission, Long> {
+    Mono<VideoImportSubmission> findBySubmissionId(String submissionId);
 
-    Optional<VideoImportSubmission> findBySubmissionId(String submissionId);
 }

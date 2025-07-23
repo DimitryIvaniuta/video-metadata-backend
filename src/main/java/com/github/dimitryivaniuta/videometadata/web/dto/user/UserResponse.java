@@ -2,6 +2,7 @@ package com.github.dimitryivaniuta.videometadata.web.dto.user;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.github.dimitryivaniuta.videometadata.domain.entity.User;
+import com.github.dimitryivaniuta.videometadata.domain.model.Role;
 
 import java.time.Instant;
 import java.util.Set;
@@ -21,7 +22,7 @@ public record UserResponse(
         @JsonProperty("id") Long id,
         @JsonProperty("username") String username,
         @JsonProperty("email") String email,
-        @JsonProperty("roles") Set<String> roles,
+        @JsonProperty("roles") Set<Role> roles,
         @JsonProperty("enabled") boolean enabled,
         @JsonProperty("created_at") Instant createdAt,
         @JsonProperty("updated_at") Instant updatedAt

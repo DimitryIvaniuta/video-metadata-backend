@@ -1,5 +1,6 @@
 package com.github.dimitryivaniuta.videometadata.web.dto.user;
 
+import com.github.dimitryivaniuta.videometadata.domain.model.Role;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.Email;
@@ -17,5 +18,5 @@ public record UserCreateRequest(
         @NotBlank @Size(max = 150) String username,
         @Email @Size(max = 255) String email,
         @NotBlank @Size(min = 8, max = 200) String password,
-        Set<String> roles
+        Set<Role> roles
 ) {}

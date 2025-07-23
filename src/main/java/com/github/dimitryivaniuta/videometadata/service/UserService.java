@@ -2,139 +2,117 @@ package com.github.dimitryivaniuta.videometadata.service;
 
 import com.github.dimitryivaniuta.videometadata.domain.entity.User;
 import com.github.dimitryivaniuta.videometadata.domain.model.Role;
-import com.github.dimitryivaniuta.videometadata.web.dto.user.UserCreateRequest;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.util.List;
-import java.util.Optional;
+import java.time.Instant;
+import java.util.Set;
 
 /**
- * Service API for user management, exposing both
- * synchronous (blocking) and reactive (non‑blocking) methods.
+ * Reactive API for managing {@link User} entities.
+ * <p>
+ * All methods are non-blocking and return Reactor types. Business rules such as uniqueness,
+ * password encoding and role normalization are enforced here, not in the controller layer.
  */
 public interface UserService {
 
-    // ---------- Synchronous (blocking) API ----------
+    /**
+     * Creates a new user with the provided parameters.
+     *
+     * @param username   unique username
+     * @param email      optional unique email
+     * @param rawPassword plaintext password (will be encoded)
+     * @param roles      optional roles; when {@code null} or empty, defaults to {@link Role#USER}
+     * @return mono emitting the persisted user
+     */
+    Mono<User> createUser(String username, String email, String rawPassword, Set<Role> roles);
 
     /**
-     * Creates a new user after validating uniqueness of username/email.
+     * Returns a user by id.
      *
-     * @param request the user creation payload
-     * @return the persisted {@link User} entity
-     * @throws IllegalArgumentException if username or email already exists
+     * @param id user id
+     * @return mono with the user or empty if not found
      */
-    User createUser(UserCreateRequest request);
+    Mono<User> getById(Long id);
 
     /**
-     * Fetches a user by its unique identifier.
+     * Returns a user by username.
      *
-     * @param id the user ID
-     * @return an {@link Optional} containing the {@link User} if found
+     * @param username username
+     * @return mono with the user or empty if not found
      */
-    Optional<User> findById(Long id);
+    Mono<User> getByUsername(String username);
 
     /**
-     * Fetches a user by its username.
+     * Updates base profile fields (username/email). Does not change password or roles.
      *
-     * @param username the unique username
-     * @return an {@link Optional} containing the {@link User} if found
+     * @param id       user id
+     * @param username new username
+     * @param email    new email
+     * @return mono with updated user or error if not found/violates constraints
      */
-    Optional<User> findByUsername(String username);
+    Mono<User> updateProfile(Long id, String username, String email);
 
     /**
-     * Lists users in a paginated fashion.
+     * Replaces the complete role set for the user.
      *
-     * @param pageable the pagination and sort parameters
-     * @return a {@link Page} of {@link User} entities
+     * @param id    user id
+     * @param roles new role set
+     * @return mono emitting the updated user
      */
-    Page<User> listUsers(Pageable pageable);
+    Mono<User> replaceRoles(Long id, Set<Role> roles);
 
     /**
-     * Updates selected fields of an existing user.
+     * Changes the password to the encoded form of {@code rawPassword}.
      *
-     * @param id          the user ID
-     * @param newPassword the new raw password (or null to leave unchanged)
-     * @param newRole     the new {@link Role} (or null to leave unchanged)
-     * @param enabled     whether to enable/disable the account (or null to leave unchanged)
-     * @return the updated {@link User} entity
-     * @throws jakarta.persistence.EntityNotFoundException if no user exists with given ID
+     * @param id          user id
+     * @param rawPassword plaintext
+     * @return mono signalling completion or error
      */
-    User updateUser(Long id,
-                    String newPassword,
-                    Role newRole,
-                    Boolean enabled);
+    Mono<Void> changePassword(Long id, String rawPassword);
 
     /**
-     * Deletes a user by its ID. Idempotent: no error if user does not exist.
+     * Enables/disables a user.
      *
-     * @param id the user ID to delete
+     * @param id      user id
+     * @param enabled flag
+     * @return mono signalling completion or error
      */
-    void deleteUser(Long id);
+    Mono<Void> setEnabled(Long id, boolean enabled);
 
     /**
-     * Returns all users. Use with caution for large datasets.
+     * Locks/unlocks a user.
      *
-     * @return a list of all {@link User} entities
+     * @param id     user id
+     * @param locked flag
+     * @return mono signalling completion or error
      */
-    List<User> findAll();
-
-
-    // ---------- Reactive (non‑blocking) API ----------
+    Mono<Void> setLocked(Long id, boolean locked);
 
     /**
-     * Reactive wrapper for {@link #createUser(UserCreateRequest)}.
+     * Records the last successful login time.
      *
-     * @param request the user creation payload
-     * @return a {@link Mono} emitting the created {@link User}
+     * @param id     user id
+     * @param moment timestamp (UTC)
+     * @return mono signalling completion or error
      */
-    Mono<User> createUserMono(UserCreateRequest request);
+    Mono<Void> updateLastLogin(Long id, Instant moment);
 
     /**
-     * Reactive wrapper for {@link #findById(Long)}.
+     * Deletes a user by id.
      *
-     * @param id the user ID
-     * @return a {@link Mono} emitting the found {@link User}, or error if not found
+     * @param id user id
+     * @return mono signalling completion (empty) or error
      */
-    Mono<User> findByIdMono(Long id);
+    Mono<Void> delete(Long id);
 
     /**
-     * Reactive wrapper for {@link #findByUsername(String)}.
+     * Case-insensitive substring search by username.
      *
-     * @param username the username
-     * @return a {@link Mono} emitting the found {@link User}, or error if not found
+     * @param fragment part of username
+     * @param offset   offset
+     * @param limit    max rows
+     * @return flux of users
      */
-    Mono<User> findByUsernameMono(String username);
-
-    /**
-     * Reactive wrapper for {@link #listUsers(Pageable)}.
-     *
-     * @param pageable pagination and sort parameters
-     * @return a {@link Flux} emitting the page content of {@link User} entities
-     */
-    Flux<User> listUsersFlux(Pageable pageable);
-
-    /**
-     * Reactive wrapper for {@link #updateUser(Long, String, Role, Boolean)}.
-     *
-     * @param id          the user ID
-     * @param newPassword the new raw password (or null)
-     * @param newRole     the new role (or null)
-     * @param enabled     enabled flag (or null)
-     * @return a {@link Mono} emitting the updated {@link User}
-     */
-    Mono<User> updateUserMono(Long id,
-                              String newPassword,
-                              Role newRole,
-                              Boolean enabled);
-
-    /**
-     * Reactive wrapper for {@link #deleteUser(Long)}.
-     *
-     * @param id the user ID
-     * @return a {@link Mono} signaling completion
-     */
-    Mono<Void> deleteUserMono(Long id);
+    Flux<User> searchByUsername(String fragment, int offset, int limit);
 }

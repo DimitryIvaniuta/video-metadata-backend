@@ -1,7 +1,6 @@
-package com.github.dimitryivaniuta.videometadata.config;
+package com.github.dimitryivaniuta.videometadata.security;
 
-import com.github.dimitryivaniuta.videometadata.security.JwtAuthorizationFilter;
-import com.github.dimitryivaniuta.videometadata.security.UserDetailsServiceImpl;
+import com.github.dimitryivaniuta.videometadata.config.LoggingPasswordEncoder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -26,11 +25,11 @@ import org.springframework.security.web.server.SecurityWebFilterChain;
 public class SecurityConfig {
 
     private final JwtAuthorizationFilter jwtAuthorizationFilter;
-    private final UserDetailsServiceImpl userDetailsService;
+    private final ReactiveUserDetailsServiceImpl userDetailsService;
 
     public SecurityConfig(
             final JwtAuthorizationFilter jwtAuthorizationFilter,
-            final UserDetailsServiceImpl userDetailsService
+            final ReactiveUserDetailsServiceImpl userDetailsService
     ) {
         this.jwtAuthorizationFilter = jwtAuthorizationFilter;
         this.userDetailsService     = userDetailsService;

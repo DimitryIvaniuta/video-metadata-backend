@@ -1,118 +1,212 @@
 package com.github.dimitryivaniuta.videometadata.web.controller;
 
-import com.github.dimitryivaniuta.videometadata.web.dto.user.UserCreateRequest;
-import com.github.dimitryivaniuta.videometadata.web.dto.user.UserResponse;
-import com.github.dimitryivaniuta.videometadata.web.dto.user.UserUpdateRequest;
+import com.github.dimitryivaniuta.videometadata.domain.entity.User;
+import com.github.dimitryivaniuta.videometadata.domain.model.Role;
 import com.github.dimitryivaniuta.videometadata.service.UserService;
+import com.github.dimitryivaniuta.videometadata.web.dto.user.SetLastLoginRequest;
+import com.github.dimitryivaniuta.videometadata.web.dto.user.UserResponse;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
+import lombok.Value;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.net.URI;
-
+import java.time.Instant;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
- * REST controller for managing application users.
+ * Reactive REST controller exposing CRUD and administrative operations for {@link User}.
  * <p>
- * Exposes CRUD operations under <code>/api/users</code>. All endpoints
- * require a valid JWT; only users with the ADMIN role may invoke these methods.
+ * All endpoints are non-blocking and return Reactor types. DTOs are used to decouple
+ * HTTP payloads from the domain model.
  */
+@Slf4j
 @RestController
-@RequestMapping("/api/users")
-@Validated
+@RequestMapping(path = "/api/users", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
+@Validated
 public class UserController {
 
-    /**
-     * The service layer for user operations.
-     */
+    /** Service layer handling business rules for users. */
     private final UserService userService;
 
-    /**
-     * Create a new user.
-     *
-     * @param request the {@link UserCreateRequest} containing desired username, email, password, and roles
-     * @return a {@link Mono} emitting a {@link ResponseEntity} whose body is the created {@link UserResponse},
-     *         with HTTP status 201 (Created) and <code>Location</code> header pointing to the new resource
-     */
-    @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
-    public Mono<ResponseEntity<UserResponse>> createUser(
-            @Valid @RequestBody UserCreateRequest request) {
-        return userService.createUser(request)
-                .map(user -> ResponseEntity
-                        .created(URI.create("/users/" + user.id()))
-                        .body(user)
-                );
+    /* =========================================================
+       Create
+       ========================================================= */
+
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseStatus(HttpStatus.CREATED)
+    public Mono<UserResponse> create(@Valid @RequestBody CreateUserRequest body) {
+        return userService.createUser(body.username(), body.email(), body.password(), body.roles())
+                .map(this::toResponse);
     }
 
-    /**
-     * Update an existing user.
-     *
-     * @param id      the ID of the user to update
-     * @param request the {@link UserUpdateRequest} containing fields to modify
-     * @return a {@link Mono} emitting a {@link ResponseEntity} whose body is the updated {@link UserResponse},
-     * with HTTP status 200 (OK)
-     */
-    @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
-    public Mono<ResponseEntity<UserResponse>> updateUser(
-            @PathVariable("id") Long id,
-            @Valid @RequestBody UserUpdateRequest request) {
-        return userService.updateUser(id, request)
-                .map(ResponseEntity::ok);
-    }
+    /* =========================================================
+       Read
+       ========================================================= */
 
-    /**
-     * Delete a user by ID.
-     *
-     * @param id the ID of the user to delete
-     * @return a {@link Mono} emitting a {@link ResponseEntity<Void>} with HTTP status 204 (No Content)
-     */
-    @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
-    public Mono<ResponseEntity<Void>> deleteUser(@PathVariable("id") Long id) {
-        return userService.deleteUser(id)
-                .thenReturn(ResponseEntity.noContent().build());
-    }
-
-    /**
-     * Fetch a single user by ID.
-     *
-     * @param id the ID of the user to retrieve
-     * @return a {@link Mono} emitting a {@link ResponseEntity} whose body is the {@link UserResponse},
-     *         with HTTP status 200 (OK), or 404 if not found
-     */
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
-    public Mono<ResponseEntity<UserResponse>> getById(@PathVariable("id") Long id) {
-        return userService.findById(id)
-                .map(ResponseEntity::ok)
+    public Mono<ResponseEntity<UserResponse>> getById(@PathVariable Long id) {
+        return userService.getById(id)
+                .map(u -> ResponseEntity.ok(UserResponse.from(u)))
                 .defaultIfEmpty(ResponseEntity.notFound().build());
     }
 
-    /**
-     * List all users with pagination.
-     *
-     * @param page zero-based page index (default 0)
-     * @param size page size (default 20)
-     * @return a {@link Flux} emitting page contents as {@link UserResponse} objects,
-     *         with HTTP status 200 (OK)
-     */
-    @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
-    public Flux<UserResponse> listUsers(
-            @RequestParam(value = "page", defaultValue = "0") int page,
-            @RequestParam(value = "size", defaultValue = "20") int size) {
-
-        Pageable pageable = PageRequest.of(page, size);
-        return userService.findAll(pageable);
+    @GetMapping("/by-username/{username}")
+    public Mono<ResponseEntity<UserResponse>> getByUsername(@PathVariable String username) {
+        return userService.getByUsername(username)
+                .map(u -> ResponseEntity.ok(UserResponse.from(u)))
+                .defaultIfEmpty(ResponseEntity.notFound().build());
     }
+
+    @GetMapping("/search")
+    public Flux<UserResponse> search(
+            @RequestParam(defaultValue = "") String q,
+            @RequestParam(defaultValue = "0") @PositiveOrZero int offset,
+            @RequestParam(defaultValue = "20") @Positive int limit) {
+        return userService.searchByUsername(q, offset, Math.min(limit, 200)) // simple cap
+                .map(UserResponse::from);
+    }
+
+    /* =========================================================
+       Update (profile / roles / password / flags)
+       ========================================================= */
+
+    @PatchMapping(path = "/{id}/profile", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public Mono<UserResponse> updateProfile(@PathVariable Long id,
+                                            @Valid @RequestBody UpdateProfileRequest body) {
+        return userService.updateProfile(id, body.username(), body.email())
+                .map(this::toResponse);
+    }
+
+    @PatchMapping(path = "/{id}/roles", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public Mono<UserResponse> replaceRoles(@PathVariable Long id,
+                                           @Valid @RequestBody ReplaceRolesRequest body) {
+        return userService.replaceRoles(id, body.roles())
+                .map(this::toResponse);
+    }
+
+    @PatchMapping(path = "/{id}/password", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public Mono<Void> changePassword(@PathVariable Long id,
+                                     @Valid @RequestBody ChangePasswordRequest body) {
+        return userService.changePassword(id, body.password());
+    }
+
+    @PatchMapping(path = "/{id}/enabled", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public Mono<Void> setEnabled(@PathVariable Long id,
+                                 @Valid @RequestBody ToggleFlagRequest body) {
+        return userService.setEnabled(id, body.value());
+    }
+
+    @PatchMapping(path = "/{id}/locked", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public Mono<Void> setLocked(@PathVariable Long id,
+                                @Valid @RequestBody ToggleFlagRequest body) {
+        return userService.setLocked(id, body.value());
+    }
+
+    @PatchMapping(path = "/{id}/last-login", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public Mono<Void> setLastLogin(@PathVariable Long id,
+                                   @Valid @RequestBody SetLastLoginRequest body) {
+        return userService.updateLastLogin(id, body.moment());
+    }
+
+    /* =========================================================
+       Delete
+       ========================================================= */
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public Mono<Void> delete(@PathVariable Long id) {
+        return userService.delete(id);
+    }
+
+    /* =========================================================
+       Mapping helpers
+       ========================================================= */
+
+    /**
+     * Maps a domain {@link User} to an outward-facing DTO.
+     *
+     * @param u domain entity
+     * @return response dto
+     */
+/*    private UserResponse toResponse(User u) {
+        return new UserResponse(
+                u.getId(),
+                u.getUsername(),
+                u.getEmail(),
+                u.isEnabled(),
+                u.isLocked(),
+                u.getRoleSet(),
+                u.getCreatedAt(),
+                u.getUpdatedAt(),
+                u.getLastLoginAt()
+        );
+    }*/
+
+    /* =========================================================
+       DTOs
+       ========================================================= */
+/*
+    @Value
+    public static class CreateUserRequest {
+        @NotBlank String username;
+        @Email String email;
+        @NotBlank String password;
+        Set<Role> roles;
+    }
+
+    @Value
+    public static class UpdateProfileRequest {
+        @NotBlank String username;
+        @Email String email;
+    }
+
+    @Value
+    public static class ReplaceRolesRequest {
+        Set<Role> roles;
+    }
+
+    @Value
+    public static class ChangePasswordRequest {
+        @NotBlank String password;
+    }
+
+    @Value
+    public static class ToggleFlagRequest {
+        boolean value;
+    }
+
+    @Value
+    public static class SetLastLoginRequest {
+        Instant moment;
+    }
+
+    @Value
+    public static class UserResponse {
+        Long id;
+        String username;
+        String email;
+        boolean enabled;
+        boolean locked;
+        Set<Role> roles;
+        Instant createdAt;
+        Instant updatedAt;
+        Instant lastLoginAt;
+    }*/
 }

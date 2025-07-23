@@ -2,7 +2,6 @@ package com.github.dimitryivaniuta.videometadata.web.dto.video;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.github.dimitryivaniuta.videometadata.domain.entity.ImportStatistics;
 import lombok.Builder;
 
 /**

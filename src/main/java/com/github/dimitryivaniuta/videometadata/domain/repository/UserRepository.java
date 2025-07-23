@@ -1,37 +1,56 @@
 package com.github.dimitryivaniuta.videometadata.domain.repository;
 
 import com.github.dimitryivaniuta.videometadata.domain.entity.User;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-
-import java.util.Optional;
+import com.github.dimitryivaniuta.videometadata.domain.model.Role;
+import org.springframework.data.repository.reactive.ReactiveCrudRepository;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 /**
- * Repository for {@link User} entities.
+ * Reactive repository for {@link User} entities.
  * <p>
- * Provides CRUD plus lookup by username.
+ * Extends {@link ReactiveCrudRepository} for basic CRUD and {@link UserRepositoryCustom}
+ * for fine-grained, tuned operations (e.g. partial updates).
  */
-@Repository
-public interface UserRepository extends JpaRepository<User, Long> {
+public interface UserRepository extends ReactiveCrudRepository<User, Long>, UserRepositoryCustom {
 
     /**
-     * Find a user by their unique username.
+     * Finds a user by their unique username.
      *
-     * @param username the username to search
-     * @return an {@link Optional} containing the {@link User} if found
+     * @param username unique username
+     * @return a {@link Mono} emitting the user or empty if none found
      */
-    Optional<User> findByUsername(String username);
+    Mono<User> findByUsername(String username);
 
     /**
-     * List all users paginated.
-     * <p>
-     * Inherited from {@link JpaRepository}, but declared here
-     * for clarity in service layer use.
+     * Finds a user by their unique email (if present).
      *
-     * @param pageable pagination parameters
-     * @return a page of users
+     * @param email unique email
+     * @return a {@link Mono} emitting the user or empty if none found
      */
-    Page<User> findAll(Pageable pageable);
+    Mono<User> findByEmail(String email);
+
+    /**
+     * Checks if a user with the given username exists.
+     *
+     * @param username username to check
+     * @return {@link Mono} emitting {@code true} if user exists, else {@code false}
+     */
+    Mono<Boolean> existsByUsername(String username);
+
+    /**
+     * Checks if a user with the given email exists.
+     *
+     * @param email email to check
+     * @return {@link Mono} emitting {@code true} if user exists, else {@code false}
+     */
+    Mono<Boolean> existsByEmail(String email);
+
+    /**
+     * Returns all users that have the given role.
+     *
+     * @param role role to filter by
+     * @return {@link Flux} emitting all users that contain the role
+     */
+    Flux<User> findAllByRolesContains(Role role);
 }

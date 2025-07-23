@@ -1,281 +1,194 @@
 package com.github.dimitryivaniuta.videometadata.domain.entity;
 
-import jakarta.persistence.*;
+import com.github.dimitryivaniuta.videometadata.domain.model.Role;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
-import org.hibernate.proxy.HibernateProxy;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.relational.core.mapping.Table;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.time.Instant;
-import java.util.*;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Domain entity representing a platform user (local authentication principal).
+ * Reactive Spring Data (R2DBC) entity representing an application user.
  * <p>
- * Features:
+ * Key points:
  * <ul>
- *     <li>Sequence-based primary key shared across entities (VM_UNIQUE_ID).</li>
- *     <li>Unique username (required) & optional unique email.</li>
- *     <li>Roles persisted as a comma-separated list of uppercase tokens (e.g. {@code "ROLE_ADMIN,ROLE_USER"}).</li>
- *     <li>BCrypt hashed password only (never store raw).</li>
- *     <li>Auditing fields populated by Spring Data JPA.</li>
- *     <li>Lightweight role management helper methods.</li>
+ *     <li>No JPA/Hibernate annotations or lazy relationships. Fetch related aggregates reactively via repositories.</li>
+ *     <li>Roles are stored as a comma-separated list of uppercased tokens with the {@code ROLE_} prefix.</li>
+ *     <li>Passwords must already be encoded (e.g., BCrypt) before persisting.</li>
+ *     <li>Auditing fields ({@link #createdAt}, {@link #updatedAt}) are populated by Spring Data R2DBC auditing.</li>
  * </ul>
- * <b>Security Note:</b> Password must be encoded (BCrypt) before persisting;
- * service layer / listener should enforce this contract.
+ * <b>Security note:</b> Never store a raw password in {@link #password}.
  */
-@Entity
-@Table(
-        name = "users",
-        uniqueConstraints = {
-                @UniqueConstraint(name = "uk_users_username", columnNames = "username"),
-                @UniqueConstraint(name = "uk_users_email", columnNames = "email")
-        },
-        indexes = {
-                @Index(name = "idx_users_username", columnList = "username"),
-                @Index(name = "idx_users_email", columnList = "email")
-        }
-)
-@EntityListeners(AuditingEntityListener.class)
+@Table("users")
 @Getter
 @Setter
-@ToString(exclude = {"videos"})
+@ToString
 public class User {
 
-    /**
-     * Surrogate primary key from global sequence {@code VM_UNIQUE_ID}.
-     */
+    /** Primary key in the {@code users} table. */
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "VM_UNIQUE_ID")
-    @SequenceGenerator(
-            name = "VM_UNIQUE_ID",
-            sequenceName = "VM_UNIQUE_ID",
-            allocationSize = 10
-    )
+    @Column("id")
     private Long id;
 
-    /**
-     * Account enabled flag. If false, authentication should be denied.
-     */
-    @Column(name = "enabled", nullable = false)
-    private boolean enabled = true;
+    /** Timestamp when the user row was created (set automatically by Spring Data auditing). */
+    @CreatedDate
+    @Column("created_at")
+    private Instant createdAt;
 
-    /**
-     * Optional contact email (may also be used for password recovery).
-     */
+    /** Optional but unique email address of the user. */
     @Email
-    @Size(max = 255)
-    @Column(name = "email", length = 255)
+    @Size(max = 254)
+    @Column("email")
     private String email;
 
-    /**
-     * Account locked flag (e.g. after security events). If true, logins should be blocked.
-     */
-    @Column(name = "locked", nullable = false)
+    /** Flag indicating whether the account is enabled. Disabled users cannot authenticate. */
+    @Column("enabled")
+    private boolean enabled = true;
+
+    /** Timestamp of the last successful login, if tracked. */
+    @Column("last_login_at")
+    private Instant lastLoginAt;
+
+    /** If true, the account is locked and authentication attempts should be rejected. */
+    @Column("locked")
     private boolean locked = false;
 
-    /**
-     * BCrypt hashed password. Must never contain raw secret.
-     */
+    /** BCrypt-hashed password (never raw). */
     @NotBlank
     @Size(max = 200)
-    @Column(name = "password", nullable = false, length = 200)
+    @Column("password")
     private String password;
 
     /**
-     * Comma-separated uppercase role tokens (e.g. ROLE_ADMIN,ROLE_USER).
+     * Set of roles granted to the user.
+     * <p>
+     * Persisted as a PostgreSQL {@code text[]} column using custom converters.
+     * Defaults to containing {@link Role#USER}.
      */
-    @NotBlank
-    @Size(max = 500)
-    @Column(name = "roles", nullable = false, length = 500)
-    private String roles;
+    @Column("roles")
+    private Set<Role> roles = Set.of(Role.USER);
 
-    /**
-     * Username (unique, case-sensitive unless service layer normalizes).
-     */
-    @NotBlank
-    @Size(max = 150)
-    @Column(name = "username", nullable = false, length = 150)
-    private String username;
-
-    /* ======================================================================
-       Auditing
-       ====================================================================== */
-
-    /**
-     * Creation timestamp.
-     */
-    @CreatedDate
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
-
-    /**
-     * Last update timestamp.
-     */
+    /** Timestamp when the user row was last updated (set automatically by Spring Data auditing). */
     @LastModifiedDate
-    @Column(name = "updated_at", nullable = false)
+    @Column("updated_at")
     private Instant updatedAt;
 
-    /* ======================================================================
-       Relationships
-       ====================================================================== */
+    /** Unique username (case sensitivity depends on service-layer normalization). */
+    @NotBlank
+    @Size(max = 150)
+    @Column("username")
+    private String username;
 
     /**
-     * Videos imported / created by this user (inverse side).
-     */
-    @OneToMany(mappedBy = "createdBy", fetch = FetchType.LAZY)
-    private Set<Video> videos = new HashSet<>();
-
-    /* ======================================================================
-       Constructors
-       ====================================================================== */
-
-    protected User() {
-        // JPA
-    }
-
-    /**
-     * Convenience constructor for service layer.
-     */
-    public User(String username, String email, String password, Collection<String> roleSet) {
-        this.username = username;
-        this.email = email;
-        this.password = password;
-        setRoleSet(roleSet == null ? Set.of("ROLE_USER") : new HashSet<>(roleSet));
-        this.enabled = true;
-        this.locked = false;
-    }
-
-    /* ======================================================================
-       Roles Handling
-       ====================================================================== */
-
-    /**
-     * Returns immutable set of role tokens.
+     * Returns the roles as a mutable {@link Set}.
      *
-     * @return Set of roles (never null).
+     * @return a new mutable set of roles; never empty.
      */
-    public Set<String> getRoleSet() {
-        if (roles == null || roles.isBlank()) {
-            return Collections.emptySet();
+    public Set<Role> getRoleSet() {
+        if (roles == null || roles.isEmpty()) {
+            return new HashSet<>(Set.of(Role.USER));
         }
-        return Arrays.stream(roles.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .collect(Collectors.toUnmodifiableSet());
+        return new HashSet<>(roles);
     }
 
     /**
-     * Overwrites roles from a provided collection, normalizing each token to uppercase and ensuring prefix "ROLE_".
+     * Maps the roles to Spring Security {@link SimpleGrantedAuthority} objects.
      *
-     * @param newRoles new roles to apply.
+     * @return set of authorities corresponding to the stored roles.
      */
-    public void setRoleSet(Collection<String> newRoles) {
+    public Set<SimpleGrantedAuthority> getAuthoritySet() {
+        return getRoleSet()
+                .stream()
+                .map(Role::asAuthority)
+                .map(SimpleGrantedAuthority::new)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * Overwrites the stored roles with the provided collection.
+     * <p>
+     * If {@code newRoles} is null or empty, it falls back to {@link Role#USER}.
+     *
+     * @param newRoles new roles to store.
+     */
+    public void setRoleSet(Collection<Role> newRoles) {
         if (newRoles == null || newRoles.isEmpty()) {
-            this.roles = "ROLE_USER";
+            this.roles = Set.of(Role.USER);
             return;
         }
-        String joined = newRoles.stream()
+        this.roles = newRoles.stream()
                 .filter(Objects::nonNull)
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .map(r -> r.toUpperCase(Locale.ROOT))
-                .map(r -> r.startsWith("ROLE_") ? r : "ROLE_" + r)
-                .distinct()
-                .sorted()
-                .collect(Collectors.joining(","));
-        this.roles = joined.isEmpty() ? "ROLE_USER" : joined;
+                .collect(Collectors.toUnmodifiableSet());
+        enforceRoleInvariant();
     }
 
     /**
-     * Adds a single role.
+     * Adds a role to the current role set.
      *
      * @param role role to add.
      */
-    public void addRole(String role) {
-        Set<String> rs = new HashSet<>(getRoleSet());
+    public void addRole(Role role) {
+        Set<Role> rs = getRoleSet();
         rs.add(role);
         setRoleSet(rs);
     }
 
     /**
-     * Removes a role if present.
+     * Removes a role from the current role set. If set becomes empty,
+     * {@link Role#USER} is re-added to maintain the baseline invariant.
      *
      * @param role role to remove.
      */
-    public void removeRole(String role) {
-        Set<String> rs = new HashSet<>(getRoleSet());
+    public void removeRole(Role role) {
+        Set<Role> rs = getRoleSet();
         rs.remove(role);
         setRoleSet(rs);
     }
 
     /**
-     * @return Collection of {@link SimpleGrantedAuthority} for security adapters.
+     * Ensures {@link #roles} is never null/empty; if so, it restores {@link Role#USER}.
      */
-    public Collection<SimpleGrantedAuthority> toGrantedAuthorities() {
-        return getRoleSet().stream()
-                .map(SimpleGrantedAuthority::new)
-                .toList();
+    private void enforceRoleInvariant() {
+        if (this.roles == null || this.roles.isEmpty()) {
+            this.roles = Set.of(Role.USER);
+        }
     }
-
-    /* ======================================================================
-       Status Helpers
-       ====================================================================== */
 
     /**
-     * Indicates whether account is eligible for authentication.
+     * Equality is based on the primary key {@link #id}. If either side has a null id, falls back to reference equality.
      *
-     * @return true if enabled and not locked.
+     * @param o other object
+     * @return true if both represent the same persisted row
      */
-    public boolean isActive() {
-        return enabled && !locked;
-    }
-
-    /* ======================================================================
-       Equality / HashCode
-       ====================================================================== */
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (o == null) return false;
-        Class<?> effectiveClass = (this instanceof HibernateProxy proxy)
-                ? proxy.getHibernateLazyInitializer().getPersistentClass()
-                : getClass();
-        Class<?> otherEffectiveClass = (o instanceof HibernateProxy proxy)
-                ? proxy.getHibernateLazyInitializer().getPersistentClass()
-                : o.getClass();
-        if (effectiveClass != otherEffectiveClass) return false;
-        User other = (User) o;
-        return id != null && Objects.equals(id, other.id);
+        if (!(o instanceof User user)) return false;
+        return id != null && id.equals(user.id);
     }
-
-    @Override
-    public int hashCode() {
-        return (this instanceof HibernateProxy proxy)
-                ? proxy.getHibernateLazyInitializer().getPersistentClass().hashCode()
-                : getClass().hashCode();
-    }
-
-    /* ======================================================================
-       Lifecycle / Utility
-       ====================================================================== */
 
     /**
-     * Ensures minimal role baseline after entity load if data drift occurs.
+     * Hash code based on {@link #id}; returns 0 if id is null.
+     *
+     * @return hash code
      */
-    @PostLoad
-    private void enforceRoleInvariant() {
-        if (roles == null || roles.isBlank()) {
-            roles = "ROLE_USER";
-        }
+    @Override
+    public int hashCode() {
+        return id == null ? 0 : id.hashCode();
     }
 }

@@ -2,48 +2,56 @@ package com.github.dimitryivaniuta.videometadata.domain.repository;
 
 import com.github.dimitryivaniuta.videometadata.domain.entity.Video;
 import com.github.dimitryivaniuta.videometadata.domain.model.VideoProvider;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
-import org.springframework.data.jpa.repository.Query;
+import com.github.dimitryivaniuta.videometadata.domain.repository.projection.ProviderAvgDurationRow;
+import com.github.dimitryivaniuta.videometadata.domain.repository.projection.ProviderCountRow;
+import org.springframework.data.r2dbc.repository.Query;
+import org.springframework.data.r2dbc.repository.R2dbcRepository;
 import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 
 /**
- * Repository for {@link Video} entities.
+ * Reactive repository for {@link Video} entities.
  * <p>
- * Supports dynamic filtering via {@link JpaSpecificationExecutor},
- * plus custom aggregation queries.
+ * Note: JPQL/JPA constructs are not supported in R2DBC. Use native SQL in {@code @Query}
+ * or a separate custom repository with {@link org.springframework.data.r2dbc.core.R2dbcEntityTemplate}.
  */
 @Repository
-public interface VideoRepository
-        extends JpaRepository<Video, Long>,
-        JpaSpecificationExecutor<Video> {
+public interface VideoRepository extends R2dbcRepository<Video, Long>, VideoRepositoryCustom  {
 
     /**
-     * Count total videos grouped by provider.
+     * Average duration (ms) grouped by provider.
      *
-     * @return a list of Object arrays where
-     *         index 0 = {@link VideoProvider}, index 1 = count (Long)
+     * @return Flux of projection rows (provider, avg)
      */
-    @Query("SELECT v.provider, COUNT(v) FROM Video v GROUP BY v.provider")
-    List<Object[]> countByProvider();
+    @Query("""
+           SELECT provider, AVG(duration_ms) AS avg
+           FROM videos
+           GROUP BY provider
+           """)
+    Flux<ProviderAvgDurationRow> averageDurationByProvider();
 
     /**
-     * Compute average duration (in ms) grouped by provider.
+     * Check existence of a video by provider and external ID.
      *
-     * @return a list of Object arrays where
-     *         index 0 = {@link VideoProvider}, index 1 = average duration (Double)
+     * @param provider        provider enum
+     * @param externalVideoId external id from the provider
+     * @return Mono true if exists
      */
-    @Query("SELECT v.provider, AVG(v.durationMillis) FROM Video v GROUP BY v.provider")
-    List<Object[]> averageDurationByProvider();
+    Mono<Boolean> existsByProviderAndExternalVideoId(VideoProvider provider, String externalVideoId);
+
 
     /**
-     * Check existence of a video by provider and its external ID.
+     * Count videos grouped by provider.
      *
-     * @param provider        the video source
-     * @param externalVideoId the external provider’s video ID
-     * @return true if a matching record exists
+     * @return Flux of projection rows (provider, count)
      */
-    boolean existsByProviderAndExternalVideoId(VideoProvider provider, String externalVideoId);
+    @Query("""
+           SELECT provider, COUNT(*) AS cnt
+           FROM videos
+           GROUP BY provider
+           """)
+    Flux<ProviderCountRow> countByProvider();
 }

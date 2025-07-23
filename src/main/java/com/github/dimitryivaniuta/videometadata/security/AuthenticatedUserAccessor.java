@@ -1,29 +1,45 @@
 package com.github.dimitryivaniuta.videometadata.security;
 
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.ReactiveSecurityContextHolder;
-import org.springframework.stereotype.Component;
+import com.github.dimitryivaniuta.videometadata.domain.entity.User;
+import com.github.dimitryivaniuta.videometadata.domain.model.Role;
 import reactor.core.publisher.Mono;
 
 /**
- * Reactive accessor for current authenticated user attributes.
+ * Reactive helper for accessing the currently authenticated principal from the Spring Security context.
+ * <p>
+ * All methods return {@link Mono} to remain non-blocking and usable in reactive flows.
  */
-@Component
-public class AuthenticatedUserAccessor {
+public interface AuthenticatedUserAccessor {
 
     /**
-     * Returns current username or empty if none.
+     * @return a {@link Mono} emitting the authenticated username, or empty if none.
      */
-    public Mono<String> currentUsername() {
-        return ReactiveSecurityContextHolder.getContext()
-                .map(ctx -> ctx.getAuthentication())
-                .filter(Authentication::isAuthenticated)
-                .map(Authentication::getName);
-    }
+    Mono<String> currentUsername();
 
-    public Mono<Long> currentUserId(UserLookupPort lookupPort) {
-        return currentUsername()
-                .flatMap(lookupPort::findUserIdByUsername); // returns Mono<Long>
-    }
+    /**
+     * Shortcut that errors if no user is authenticated.
+     *
+     * @return Mono emitting the username, or error if missing
+     */
+    Mono<String> requireUsername();
 
+    /**
+     * @return a {@link Mono} emitting the full domain {@link User}, fetched from the database.
+     */
+    Mono<User> currentUser();
+
+    /**
+     * Shortcut that errors if no authenticated user can be resolved.
+     *
+     * @return Mono emitting the {@link User}, or error if missing
+     */
+    Mono<User> requireUser();
+
+    /**
+     * Checks whether the current user has the given role.
+     *
+     * @param role role to check
+     * @return Mono emitting {@code true} if the user has it, else {@code false}
+     */
+    Mono<Boolean> hasRole(Role role);
 }
