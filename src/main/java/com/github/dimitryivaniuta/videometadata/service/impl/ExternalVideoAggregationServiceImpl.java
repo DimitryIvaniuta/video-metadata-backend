@@ -1,9 +1,9 @@
 package com.github.dimitryivaniuta.videometadata.service.impl;
 
+import com.github.dimitryivaniuta.videometadata.domain.model.VideoProvider;
 import com.github.dimitryivaniuta.videometadata.service.ExternalVideoAggregationService;
 import com.github.dimitryivaniuta.videometadata.service.ExternalVideoProviderClient;
 import com.github.dimitryivaniuta.videometadata.web.dto.video.ExternalVideoMetadata;
-import com.github.dimitryivaniuta.videometadata.web.dto.video.ExternalVideoSource;
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
@@ -28,7 +28,7 @@ import java.util.Map;
 public class ExternalVideoAggregationServiceImpl implements ExternalVideoAggregationService {
 
     /** All registered provider clients, keyed by source enum. */
-    private final Map<ExternalVideoSource, ExternalVideoProviderClient> clients;
+    private final Map<VideoProvider, ExternalVideoProviderClient> clients;
 
     /**
      * Fetch one video metadata.
@@ -39,7 +39,7 @@ public class ExternalVideoAggregationServiceImpl implements ExternalVideoAggrega
     @Retry(name = "extVideo")
     @RateLimiter(name = "extVideo")
     @Bulkhead(name = "extVideo")
-    public Mono<ExternalVideoMetadata> getOne(ExternalVideoSource source, String externalId) {
+    public Mono<ExternalVideoMetadata> getOne(VideoProvider source, String externalId) {
         ExternalVideoProviderClient client = clients.get(source);
         if (client == null) {
             return Mono.error(new IllegalArgumentException("No client for source " + source));
@@ -55,12 +55,12 @@ public class ExternalVideoAggregationServiceImpl implements ExternalVideoAggrega
     @Override
     public Flux<ExternalVideoMetadata> getMany(List<VideoRequest> requests) {
         return Flux.fromIterable(requests)
-                .flatMap(req -> getOne(req.source(), req.externalId()));
+                .flatMap(req -> getOne(req.provider(), req.externalId()));
     }
 
     /* ------------------- Resilience fallbacks ------------------- */
 
-    private Mono<ExternalVideoMetadata> fallbackMono(ExternalVideoSource source, String externalId, Throwable ex) {
+    private Mono<ExternalVideoMetadata> fallbackMono(VideoProvider source, String externalId, Throwable ex) {
         log.warn("Fallback for {}:{} due to {}", source, externalId, ex.toString());
         return Mono.error(ex); // or return a stub
     }

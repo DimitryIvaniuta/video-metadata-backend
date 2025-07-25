@@ -1,17 +1,12 @@
 package com.github.dimitryivaniuta.videometadata.web.controller;
 
 import com.github.dimitryivaniuta.videometadata.domain.entity.User;
-import com.github.dimitryivaniuta.videometadata.domain.model.Role;
 import com.github.dimitryivaniuta.videometadata.service.UserService;
-import com.github.dimitryivaniuta.videometadata.web.dto.user.SetLastLoginRequest;
-import com.github.dimitryivaniuta.videometadata.web.dto.user.UserResponse;
+import com.github.dimitryivaniuta.videometadata.web.dto.user.*;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.RequiredArgsConstructor;
-import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -20,10 +15,6 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-
-import java.time.Instant;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Reactive REST controller exposing CRUD and administrative operations for {@link User}.
@@ -41,20 +32,12 @@ public class UserController {
     /** Service layer handling business rules for users. */
     private final UserService userService;
 
-    /* =========================================================
-       Create
-       ========================================================= */
-
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    public Mono<UserResponse> create(@Valid @RequestBody CreateUserRequest body) {
+    public Mono<UserResponse> create(@Valid @RequestBody UserCreateRequest body) {
         return userService.createUser(body.username(), body.email(), body.password(), body.roles())
-                .map(this::toResponse);
+                .map(UserResponse::from);
     }
-
-    /* =========================================================
-       Read
-       ========================================================= */
 
     @GetMapping("/{id}")
     public Mono<ResponseEntity<UserResponse>> getById(@PathVariable Long id) {
@@ -79,22 +62,18 @@ public class UserController {
                 .map(UserResponse::from);
     }
 
-    /* =========================================================
-       Update (profile / roles / password / flags)
-       ========================================================= */
-
     @PatchMapping(path = "/{id}/profile", consumes = MediaType.APPLICATION_JSON_VALUE)
     public Mono<UserResponse> updateProfile(@PathVariable Long id,
                                             @Valid @RequestBody UpdateProfileRequest body) {
         return userService.updateProfile(id, body.username(), body.email())
-                .map(this::toResponse);
+                .map(UserResponse::from);
     }
 
     @PatchMapping(path = "/{id}/roles", consumes = MediaType.APPLICATION_JSON_VALUE)
     public Mono<UserResponse> replaceRoles(@PathVariable Long id,
                                            @Valid @RequestBody ReplaceRolesRequest body) {
         return userService.replaceRoles(id, body.roles())
-                .map(this::toResponse);
+                .map(UserResponse::from);
     }
 
     @PatchMapping(path = "/{id}/password", consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -125,88 +104,9 @@ public class UserController {
         return userService.updateLastLogin(id, body.moment());
     }
 
-    /* =========================================================
-       Delete
-       ========================================================= */
-
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public Mono<Void> delete(@PathVariable Long id) {
         return userService.delete(id);
     }
-
-    /* =========================================================
-       Mapping helpers
-       ========================================================= */
-
-    /**
-     * Maps a domain {@link User} to an outward-facing DTO.
-     *
-     * @param u domain entity
-     * @return response dto
-     */
-/*    private UserResponse toResponse(User u) {
-        return new UserResponse(
-                u.getId(),
-                u.getUsername(),
-                u.getEmail(),
-                u.isEnabled(),
-                u.isLocked(),
-                u.getRoleSet(),
-                u.getCreatedAt(),
-                u.getUpdatedAt(),
-                u.getLastLoginAt()
-        );
-    }*/
-
-    /* =========================================================
-       DTOs
-       ========================================================= */
-/*
-    @Value
-    public static class CreateUserRequest {
-        @NotBlank String username;
-        @Email String email;
-        @NotBlank String password;
-        Set<Role> roles;
-    }
-
-    @Value
-    public static class UpdateProfileRequest {
-        @NotBlank String username;
-        @Email String email;
-    }
-
-    @Value
-    public static class ReplaceRolesRequest {
-        Set<Role> roles;
-    }
-
-    @Value
-    public static class ChangePasswordRequest {
-        @NotBlank String password;
-    }
-
-    @Value
-    public static class ToggleFlagRequest {
-        boolean value;
-    }
-
-    @Value
-    public static class SetLastLoginRequest {
-        Instant moment;
-    }
-
-    @Value
-    public static class UserResponse {
-        Long id;
-        String username;
-        String email;
-        boolean enabled;
-        boolean locked;
-        Set<Role> roles;
-        Instant createdAt;
-        Instant updatedAt;
-        Instant lastLoginAt;
-    }*/
 }

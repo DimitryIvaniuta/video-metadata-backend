@@ -3,6 +3,7 @@ package com.github.dimitryivaniuta.videometadata.web.dto.video;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.github.dimitryivaniuta.videometadata.domain.model.VideoCategory;
 import com.github.dimitryivaniuta.videometadata.domain.model.VideoProvider;
+import lombok.Builder;
 
 import java.time.ZonedDateTime;
 
@@ -20,6 +21,7 @@ import java.time.ZonedDateTime;
  * @param createdByUserId  User ID of importer (nullable if system).
  * @param importedAt       Timestamp when imported into system.
  */
+@Builder
 public record VideoResponse(
         @JsonProperty("id") Long id,
         @JsonProperty("external_video_id") String externalVideoId,
@@ -27,13 +29,23 @@ public record VideoResponse(
         @JsonProperty("description") String description,
         @JsonProperty("provider") VideoProvider provider,
         @JsonProperty("category") VideoCategory category,
-        @JsonProperty("duration_ms") long durationMs,
+        @JsonProperty("duration") Duration durationMs,
         @JsonProperty("upload_date_time") ZonedDateTime uploadDateTime,
         @JsonProperty("created_by_user_id") Long createdByUserId,
         @JsonProperty("imported_at") ZonedDateTime importedAt
 ) {
     public static VideoResponse from(com.github.dimitryivaniuta.videometadata.domain.entity.Video v) {
-        return new VideoResponse(
+        return
+                VideoResponse.builder()
+                        .id(v.getId())
+                        .externalVideoId(v.getExternalVideoId())
+                        .title(v.getTitle())
+                        .description(v.getDescription())
+                        .provider(v.getProvider())
+                        .category(v.getCategory())
+                        .durationMs(v.getDuration())
+                        .build();
+                /*new VideoResponse(
                 v.getId(),
                 v.getExternalVideoId(),
                 v.getTitle(),
@@ -44,6 +56,6 @@ public record VideoResponse(
                 v.getUploadDateTime(),
                 v.getCreatedBy().getId(),
                 v.getImportedAt()
-        );
+        );*/
     }
 }

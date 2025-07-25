@@ -1,7 +1,7 @@
 package com.github.dimitryivaniuta.videometadata.service;
 
+import com.github.dimitryivaniuta.videometadata.domain.model.VideoProvider;
 import com.github.dimitryivaniuta.videometadata.web.dto.video.ExternalVideoMetadata;
-import com.github.dimitryivaniuta.videometadata.web.dto.video.ExternalVideoSource;
 import reactor.core.publisher.Mono;
 
 /**
@@ -20,5 +20,5 @@ public interface ExternalVideoProviderClient {
     /**
      * @return which provider this client represents.
      */
-    ExternalVideoSource source();
+    VideoProvider provider();
 }

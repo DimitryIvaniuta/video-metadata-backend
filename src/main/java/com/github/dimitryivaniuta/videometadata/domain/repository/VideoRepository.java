@@ -22,9 +22,9 @@ import java.util.List;
 public interface VideoRepository extends R2dbcRepository<Video, Long>, VideoRepositoryCustom  {
 
     /**
-     * Average duration (ms) grouped by provider.
+     * Compute the average duration (ms) per provider.
      *
-     * @return Flux of projection rows (provider, avg)
+     * @return a {@link Flux} of rows containing provider + average duration
      */
     @Query("""
            SELECT provider, AVG(duration_ms) AS avg
@@ -34,19 +34,19 @@ public interface VideoRepository extends R2dbcRepository<Video, Long>, VideoRepo
     Flux<ProviderAvgDurationRow> averageDurationByProvider();
 
     /**
-     * Check existence of a video by provider and external ID.
+     * Check if a given (provider, externalVideoId) pair already exists.
      *
-     * @param provider        provider enum
-     * @param externalVideoId external id from the provider
-     * @return Mono true if exists
+     * @param provider        enum identifying the source
+     * @param externalVideoId provider‑specific video ID
+     * @return {@link Mono} emitting true if a matching video exists
      */
     Mono<Boolean> existsByProviderAndExternalVideoId(VideoProvider provider, String externalVideoId);
 
 
     /**
-     * Count videos grouped by provider.
+     * Count videos per provider.
      *
-     * @return Flux of projection rows (provider, count)
+     * @return a {@link Flux} of rows containing provider + count
      */
     @Query("""
            SELECT provider, COUNT(*) AS cnt
@@ -54,4 +54,32 @@ public interface VideoRepository extends R2dbcRepository<Video, Long>, VideoRepo
            GROUP BY provider
            """)
     Flux<ProviderCountRow> countByProvider();
+
+    /**
+     * Fetch all videos owned by a specific user.
+     *
+     * @param createdByUserId internal user ID (foreign key)
+     * @return {@link Flux} of videos for that owner
+     */
+    Flux<Video> findAllByCreatedByUserId(Long createdByUserId);
+
+    /**
+     * Case‑insensitive search by title with manual pagination.
+     *
+     * @param fragment substring to match within title
+     * @param offset   zero‑based starting row offset
+     * @param limit    maximum number of rows to return
+     * @return {@link Flux} of matching videos
+     */
+    @Query("""
+           SELECT *
+             FROM videos
+            WHERE LOWER(title) LIKE LOWER(CONCAT('%', :fragment, '%'))
+         ORDER BY title ASC
+            OFFSET :offset
+             LIMIT :limit
+           """)
+    Flux<Video> searchByTitle(String fragment, int offset, int limit);
+
+
 }

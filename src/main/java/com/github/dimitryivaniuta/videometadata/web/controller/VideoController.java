@@ -1,160 +1,172 @@
 package com.github.dimitryivaniuta.videometadata.web.controller;
 
+import com.github.dimitryivaniuta.videometadata.domain.entity.Video;
+import com.github.dimitryivaniuta.videometadata.domain.model.VideoProvider;
 import com.github.dimitryivaniuta.videometadata.service.VideoService;
-import com.github.dimitryivaniuta.videometadata.web.dto.video.*;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.web.PageableDefault;
+import lombok.Value;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.net.URI;
-
-import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
+import java.time.Instant;
+import java.util.List;
 
 /**
- * Reactive REST controller for Video CRUD, search, and statistics.
+ * Reactive REST controller for video metadata.
  */
+@Slf4j
 @RestController
-@RequestMapping("/videos")
-@Validated
+@RequestMapping(path = "/api/videos", produces = "application/json")
 @RequiredArgsConstructor
 public class VideoController {
 
     private final VideoService videoService;
 
     /**
-     * Create a new Video record manually.
+     * Create a new video by fetching metadata from an external provider.
      * ADMIN only.
-     *
-     * @param req the create request payload
-     * @return 201 Created with Location header and body
      */
-    @PostMapping(
-            consumes = APPLICATION_JSON_VALUE,
-            produces = APPLICATION_JSON_VALUE
-    )
+    @PostMapping(consumes = "application/json")
     @PreAuthorize("hasRole('ADMIN')")
     public Mono<ResponseEntity<VideoResponse>> create(
-            @Valid @RequestBody VideoCreateRequest req
+            @Valid @RequestBody CreateVideoRequest req
     ) {
-        return videoService
-                .saveMono(req.toEntity())
+        return videoService.createVideo(req.getProvider(), req.getExternalVideoId())
                 .map(VideoResponse::from)
                 .map(resp -> {
-                    URI loc = URI.create("/videos/" + resp.id());
-                    return ResponseEntity
-                            .created(loc)
-                            .body(resp);
+                    URI loc = URI.create("/api/videos/" + resp.id());
+                    return ResponseEntity.created(loc).body(resp);
                 });
     }
 
     /**
-     * Update an existing Video.
+     * Refresh metadata for an existing video.
      * ADMIN only.
-     *
-     * @param id  the video ID
-     * @param req fields to update
-     * @return 200 OK with updated body, or 404 if not found
      */
-    @PutMapping(
-            path = "/{id}",
-            consumes = APPLICATION_JSON_VALUE,
-            produces = APPLICATION_JSON_VALUE
-    )
+    @PatchMapping(path = "/{id}/metadata")
     @PreAuthorize("hasRole('ADMIN')")
-    public Mono<ResponseEntity<VideoResponse>> update(
-            @PathVariable Long id,
-            @Valid @RequestBody VideoUpdateRequest req
-    ) {
-        return videoService.findByIdMono(id)
-                .flatMap(existing -> {
-                    existing.setTitle(req.title());
-                    existing.setDurationMillis(req.durationMillis());
-                    existing.setUploadDateTime(req.uploadDateTime());
-                    existing.setCategory(req.category());
-                    // any other updatable fields
-                    return videoService.saveMono(existing);
-                })
+    public Mono<ResponseEntity<VideoResponse>> refreshMetadata(@PathVariable Long id) {
+        return videoService.updateMetadata(id)
                 .map(VideoResponse::from)
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.notFound().build());
     }
 
     /**
-     * Delete a Video by ID.
+     * Delete a video.
      * ADMIN only.
-     *
-     * @param id the video ID
-     * @return 204 No Content if deleted, or 404 if not found
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public Mono<ResponseEntity<Void>> delete(@PathVariable Long id) {
-        return videoService.findByIdMono(id)
-                .flatMap(v -> videoService.deleteByIdMono(id)
-                        .thenReturn(ResponseEntity.noContent().<Void>build()))
-                .defaultIfEmpty(ResponseEntity.notFound().build());
+        return videoService.delete(id)
+                .thenReturn(ResponseEntity.noContent().<Void>build());
     }
 
     /**
-     * List videos with optional filter, pagination, and sorting.
+     * List videos filtered by title substring, with offset/limit pagination.
      * Authenticated users.
-     *
-     * @param filter   filter criteria
-     * @param pageable page & sort
-     * @return flux of matching VideoResponse
      */
-    @GetMapping(produces = APPLICATION_JSON_VALUE)
+    @GetMapping
     @PreAuthorize("isAuthenticated()")
     public Flux<VideoResponse> list(
-            @Valid VideoFilterRequest filter,
-            @PageableDefault(size = 20) Pageable pageable
+            @RequestParam(defaultValue = "") String q,
+            @RequestParam(defaultValue = "0") @PositiveOrZero int offset,
+            @RequestParam(defaultValue = "20") @Positive int limit
     ) {
-        return videoService.searchFlux(
-                        filter.provider(),
-                        filter.uploadDateFrom(),
-                        filter.uploadDateTo(),
-                        filter.minDurationMillis(),
-                        filter.maxDurationMillis(),
-                        filter.category(),
-                        pageable
-                )
+        int cap = Math.min(limit, 200);
+        return videoService.searchByTitle(q, offset, cap)
                 .map(VideoResponse::from);
     }
 
     /**
-     * Fetch a single video by ID.
+     * Get a single video by ID.
      * Authenticated users.
-     *
-     * @param id the video ID
-     * @return 200 OK with body, or 404 if not found
      */
-    @GetMapping(path = "/{id}", produces = APPLICATION_JSON_VALUE)
+    @GetMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
     public Mono<ResponseEntity<VideoResponse>> getById(@PathVariable Long id) {
-        return videoService.findByIdMono(id)
+        return videoService.getById(id)
                 .map(VideoResponse::from)
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.notFound().build());
     }
 
     /**
-     * Retrieve video statistics (total count & average duration per provider).
-     * Results should be cached.
+     * Video statistics: count & average duration by provider.
      * Authenticated users.
-     *
-     * @return Mono of VideoStatsResponse
      */
-    @GetMapping(path = "/stats", produces = APPLICATION_JSON_VALUE)
+    @GetMapping("/stats")
     @PreAuthorize("isAuthenticated()")
     public Mono<VideoStatsResponse> stats() {
         return videoService.getStatistics();
     }
-}
 
+    /*==========================================================
+      DTOs
+     ==========================================================*/
+
+    @Value
+    public static class CreateVideoRequest {
+        @Positive(message = "ownerId must be positive")
+        Long ownerId;
+
+        VideoProvider provider;
+
+        @NotBlank(message = "externalVideoId must not be blank")
+        String externalVideoId;
+    }
+
+    @Value
+    public static class VideoResponse {
+        Long id;
+        String title;
+        String description;
+        long durationMillis;
+        Instant uploadDateTime;
+        String externalVideoId;
+        VideoProvider provider;
+        Instant createdAt;
+        Instant updatedAt;
+
+        public static VideoResponse from(Video v) {
+            return new VideoResponse(
+                    v.getId(),
+                    v.getTitle(),
+                    v.getDescription(),
+                    v.getDuration().toMillis(),
+                    v.getUploadDateTime().toInstant(),
+                    v.getExternalVideoId(),
+                    VideoProvider.valueOf(v.getProvider().name()),
+                    v.getCreatedAt(),
+                    v.getUpdatedAt()
+            );
+        }
+    }
+
+    @Value
+    public static class ProviderStat {
+        VideoProvider provider;
+        long count;
+        double avgDurationMillis;
+    }
+
+    @Value
+    public static class VideoStatsResponse {
+        long totalVideos;
+        List<ProviderStat> byProvider;
+
+        public static VideoStatsResponse of(long total, List<ProviderStat> list) {
+            return new VideoStatsResponse(total, list);
+        }
+    }
+}

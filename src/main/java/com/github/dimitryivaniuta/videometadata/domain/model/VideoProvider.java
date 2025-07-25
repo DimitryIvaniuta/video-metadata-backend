@@ -8,6 +8,7 @@ package com.github.dimitryivaniuta.videometadata.domain.model;
 public enum VideoProvider {
     YOUTUBE,
     VIMEO,
+    DAILYMOTION,
     INTERNAL,
     OTHER,
     UNSPECIFIED

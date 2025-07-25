@@ -1,5 +1,6 @@
 package com.github.dimitryivaniuta.videometadata.security;
 
+import com.github.dimitryivaniuta.videometadata.config.JwtProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.stereotype.Component;
@@ -29,7 +30,7 @@ public class JwtUtils {
     /**
      * Configuration properties for JWT (issuer, audience, secret, expiry).
      */
-    private final SecurityJwtProperties props;
+    private final JwtProperties props;
 
     /**
      * Generates an HS256‑signed JWT for the given username.

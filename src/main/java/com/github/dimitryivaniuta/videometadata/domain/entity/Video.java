@@ -42,7 +42,7 @@ public class Video {
     @Column("category")
     private VideoCategory category;
 
-    /** Provider-specific external video id (e.g. YouTube id). */
+    /** Provider`-specific external video id (e.g. YouTube id). */
     @Column("external_video_id")
     private String externalVideoId;
 

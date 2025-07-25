@@ -6,6 +6,7 @@ package com.github.dimitryivaniuta.videometadata.domain.model;
  * Append new values ONLY at the end to preserve database correctness.
  */
 public enum VideoCategory {
+    GENERAL,
     EDUCATION,
     ENTERTAINMENT,
     MUSIC,

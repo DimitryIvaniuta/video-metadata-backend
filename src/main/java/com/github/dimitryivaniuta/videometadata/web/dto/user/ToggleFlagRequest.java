@@ -4,18 +4,17 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.time.Instant;
-
 /**
- * Request body for explicitly setting a user's last‐login timestamp.
+ * Generic request body for toggling a boolean flag on a user
+ * (e.g. enabled or locked).
  *
- * @param moment timestamp to record (UTC instant)
+ * @param value new boolean value
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record SetLastLoginRequest(
-        @JsonProperty("moment")
-        Instant moment
+public record ToggleFlagRequest(
+        @JsonProperty("value")
+        boolean value
 ) {
     @JsonCreator
-    public SetLastLoginRequest { }
+    public ToggleFlagRequest { }
 }

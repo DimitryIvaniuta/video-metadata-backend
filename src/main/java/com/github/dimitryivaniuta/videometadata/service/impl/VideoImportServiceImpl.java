@@ -7,15 +7,12 @@ import com.github.dimitryivaniuta.videometadata.domain.model.SubmissionStatus;
 import com.github.dimitryivaniuta.videometadata.domain.repository.VideoImportSubmissionRepository;
 import com.github.dimitryivaniuta.videometadata.event.VideoImportRequestedEvent;
 import com.github.dimitryivaniuta.videometadata.exception.RateLimitedException;
-import com.github.dimitryivaniuta.videometadata.ratelimit.RateLimitMetadata;
 import com.github.dimitryivaniuta.videometadata.ratelimit.ReactiveRateLimiter;
 import com.github.dimitryivaniuta.videometadata.service.VideoImportService;
 import com.github.dimitryivaniuta.videometadata.util.SubmissionIdGenerator;
-import com.github.dimitryivaniuta.videometadata.web.dto.video.ImportStatisticsDto;
 import com.github.dimitryivaniuta.videometadata.web.dto.video.VideoImportProgressResponse;
 import com.github.dimitryivaniuta.videometadata.web.dto.video.VideoImportRequest;
 import com.github.dimitryivaniuta.videometadata.web.dto.video.VideoImportSubmissionResponse;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -23,11 +20,11 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
-import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Default implementation of {@link VideoImportService}.
@@ -75,7 +72,7 @@ public class VideoImportServiceImpl implements VideoImportService {
                             .submissionId(submissionId)
                             .username(username)
                             .provider(request.provider())
-                            .externalIds(new LinkedHashSet<>(request.externalIds()))
+                            .externalIds(Set.copyOf(request.externalIds()))
                             .externalPlaylistId(request.externalPlaylistId())
                             .forced(Boolean.TRUE.equals(request.force()))
                             .queuedAt(now)

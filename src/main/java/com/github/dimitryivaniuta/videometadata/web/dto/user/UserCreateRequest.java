@@ -1,9 +1,16 @@
 package com.github.dimitryivaniuta.videometadata.web.dto.user;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.github.dimitryivaniuta.videometadata.domain.model.Role;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.Email;
+import lombok.Builder;
+import lombok.Value;
+import lombok.extern.jackson.Jacksonized;
+
 import java.util.Set;
 
 /**
@@ -14,9 +21,23 @@ import java.util.Set;
  * @param password Raw password to encode server-side.
  * @param roles    Desired roles (ADMIN, USER, etc.). If null -> default USER.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record UserCreateRequest(
-        @NotBlank @Size(max = 150) String username,
-        @Email @Size(max = 255) String email,
-        @NotBlank @Size(min = 8, max = 200) String password,
+        @JsonProperty("username")
+        @NotBlank(message = "Username must not be blank")
+        String username,
+
+        @JsonProperty("email")
+        @Email(message = "Email must be valid")
+        String email,
+
+        @JsonProperty("password")
+        @NotBlank(message = "Password must not be blank")
+        String password,
+
+        @JsonProperty("roles")
         Set<Role> roles
-) {}
+) {
+    @JsonCreator
+    public UserCreateRequest { }
+}

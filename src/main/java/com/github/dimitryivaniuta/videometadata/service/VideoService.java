@@ -1,151 +1,87 @@
 package com.github.dimitryivaniuta.videometadata.service;
 
 import com.github.dimitryivaniuta.videometadata.domain.entity.Video;
-import com.github.dimitryivaniuta.videometadata.domain.model.VideoCategory;
 import com.github.dimitryivaniuta.videometadata.domain.model.VideoProvider;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import com.github.dimitryivaniuta.videometadata.web.dto.video.ExternalVideoMetadata;
+import com.github.dimitryivaniuta.videometadata.web.dto.video.VideoRequest;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
- * Service API for video metadata operations, exposing both
- * blocking and reactive method variants.
+ * Reactive API for managing video metadata entities.
+ * <p>
+ * All methods are non‑blocking and return Reactor types.
  */
 public interface VideoService {
 
-    // ---------- Synchronous (blocking) API ----------
+    /**
+     * Creates and persists a new {@link Video} for the given owner and external reference.
+     * <p>
+     * Fetches metadata from the external provider then saves the entity.
+     *
+     * @param provider      external video provider (e.g. YOUTUBE)
+     * @param externalId  provider‑specific video identifier
+     * @return Mono emitting the saved {@link Video}
+     */
+    Mono<Video> createVideo(VideoProvider provider, String externalId);
 
     /**
-     * Persist a {@link Video} entity.
+     * Retrieves a video by its internal ID.
      *
-     * @param video the entity to save
-     * @return the saved {@link Video}
+     * @param id video ID
+     * @return Mono emitting the {@link Video} or empty if not found
      */
-    Video save(Video video);
+    Mono<Video> getById(Long id);
 
     /**
-     * Find a video by its ID.
+     * Lists all videos owned by the given user.
      *
-     * @param id the video ID
-     * @return an {@link Optional} containing the {@link Video} if found
+     * @param ownerId owner user ID
+     * @return Flux emitting all videos for that owner
      */
-    Optional<Video> findById(Long id);
+    Flux<Video> getByOwner(Long ownerId);
 
     /**
-     * Delete a video by its ID.
+     * Refreshes metadata for an existing video from the external provider and updates the stored entity.
      *
-     * @param id the video ID
-     * @throws jakarta.persistence.EntityNotFoundException if not found
+     * @param videoId internal video ID
+     * @return Mono emitting the updated {@link Video}
      */
-    void deleteById(Long id);
+    Mono<Video> updateMetadata(Long videoId);
 
     /**
-     * Search for videos matching optional criteria, paginated.
+     * Deletes a video by its ID.
      *
-     * @param provider          optional {@link VideoProvider} filter
-     * @param from              optional earliest upload timestamp
-     * @param to                optional latest upload timestamp
-     * @param minDurationMillis optional minimum duration in milliseconds
-     * @param maxDurationMillis optional maximum duration in milliseconds
-     * @param category          optional {@link VideoCategory} filter
-     * @param pageable          pagination and sort parameters
-     * @return a {@link Page} of matching {@link Video} entities
+     * @param id video ID
+     * @return Mono signaling completion
      */
-    Page<Video> search(VideoProvider provider,
-                       ZonedDateTime from,
-                       ZonedDateTime to,
-                       Long minDurationMillis,
-                       Long maxDurationMillis,
-                       VideoCategory category,
-                       Pageable pageable);
+    Mono<Void> delete(Long id);
 
     /**
-     * Count total videos per provider.
+     * Searches videos by title substring (case‑insensitive).
      *
-     * @return a map from {@link VideoProvider} to count
+     * @param fragment title fragment
+     * @param offset   zero‑based row offset
+     * @param limit    maximum rows to return
+     * @return Flux emitting matching videos
      */
-    Map<VideoProvider, Long> countPerProvider();
+    Flux<Video> searchByTitle(String fragment, int offset, int limit);
 
     /**
-     * Compute average video duration (ms) per provider.
+     * Bulk fetch metadata for multiple external video references without persisting.
      *
-     * @return a map from {@link VideoProvider} to average duration in ms
+     * @param requests list of (source, externalId) pairs
+     * @return Flux emitting fetched {@link ExternalVideoMetadata}
      */
-    Map<VideoProvider, Long> averageDurationPerProvider();
-
-    /**
-     * Check existence of a video by provider and external ID.
-     *
-     * @param provider        the video source
-     * @param externalVideoId the external ID
-     * @return {@code true} if such a video record exists
-     */
-    boolean existsByProviderAndExternalId(VideoProvider provider,
-                                          String externalVideoId);
-
-
-    // ---------- Reactive (non‐blocking) API ----------
-
-    /**
-     * Reactive wrapper for {@link #save(Video)}.
-     *
-     * @param video the video to save
-     * @return a {@link Mono} emitting the saved {@link Video}
-     */
-    Mono<Video> saveMono(Video video);
-
-    /**
-     * Reactive wrapper for {@link #findById(Long)}.
-     *
-     * @param id the video ID
-     * @return a {@link Mono} emitting the found {@link Video}, or error if not found
-     */
-    Mono<Video> findByIdMono(Long id);
-
-    /**
-     * Reactive wrapper for {@link #deleteById(Long)}.
-     *
-     * @param id the video ID
-     * @return a {@link Mono} signaling completion
-     */
-    Mono<Void> deleteByIdMono(Long id);
-
-    /**
-     * Reactive wrapper for {@link #search(VideoProvider, ZonedDateTime, ZonedDateTime, Long, Long, VideoCategory, Pageable)}.
-     *
-     * @param provider          optional provider filter
-     * @param from              optional earliest upload
-     * @param to                optional latest upload
-     * @param minDurationMillis optional minimum duration
-     * @param maxDurationMillis optional maximum duration
-     * @param category          optional category filter
-     * @param pageable          pagination parameters
-     * @return a {@link Flux} emitting the matching {@link Video} entities
-     */
-    Flux<Video> searchFlux(VideoProvider provider,
-                           ZonedDateTime from,
-                           ZonedDateTime to,
-                           Long minDurationMillis,
-                           Long maxDurationMillis,
-                           VideoCategory category,
-                           Pageable pageable);
-
-    /**
-     * Reactive wrapper for {@link #countPerProvider()}.
-     *
-     * @return a {@link Mono} emitting the provider→count map
-     */
-    Mono<Map<VideoProvider, Long>> countPerProviderMono();
+    Flux<ExternalVideoMetadata> fetchExternalMetadata(List<VideoRequest> requests);
 
     /**
      * Reactive wrapper for {@link #averageDurationPerProvider()}.
      *
-     * @return a {@link Mono} emitting the provider→average duration map
+     * @return a {@link Mono} emitting the provider->average duration map
      */
     Mono<Map<VideoProvider, Long>> averageDurationPerProviderMono();
 
